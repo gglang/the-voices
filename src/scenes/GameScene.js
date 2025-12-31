@@ -26,8 +26,8 @@ export class GameScene extends Phaser.Scene {
   constructor() {
     super('GameScene');
     // Map dimensions in tiles (16x16 pixels each)
-    this.mapWidth = 100;
-    this.mapHeight = 100;
+    this.mapWidth = 200;
+    this.mapHeight = 200;
     this.tileSize = 16;
   }
 
@@ -43,6 +43,7 @@ export class GameScene extends Phaser.Scene {
     this.humans = [];
     this.police = [];
     this.copRespawnQueue = [];
+    this.deadCopBodies = []; // Track dead cop positions for discovery
 
     // Randomize target preference
     const hairKeys = Object.keys(HAIR_COLORS);
@@ -373,6 +374,10 @@ export class GameScene extends Phaser.Scene {
     // Make UI camera ignore this new sprite
     if (this.hud) {
       this.hud.ignoreGameObject(cop.sprite);
+      // Also ignore health bar if it exists later
+      if (cop.healthBar) {
+        this.hud.ignoreGameObject(cop.healthBar);
+      }
     }
   }
 
@@ -399,7 +404,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.setScore(this.score);
   }
 
-  queueCopRespawn(x, y, isHumanKill = false) {
+  queueCopRespawn(x, y, isCopBody = false) {
     // Queue 3 cops to spawn in 30 seconds
     const spawnTime = this.time.now + 30000;
 
@@ -415,11 +420,60 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Show notification based on kill type
-    if (isHumanKill) {
-      this.hud.showNotification('A body was discovered!\n3 police have been dispatched', 3000);
+    // Show notification based on body type
+    if (isCopBody) {
+      this.hud.showNotification('Dead officer found!\n3 police dispatched', 3000);
     } else {
-      this.hud.showNotification('An officer is down!\n3 police have been dispatched', 3000);
+      this.hud.showNotification('Body discovered!\n3 police dispatched', 3000);
+    }
+  }
+
+  alertCopsToDisturbance(x, y) {
+    // Called when a kill happens - send 2 closest cops to investigate (no distance limit)
+    const availableCops = this.police.filter(cop =>
+      cop.isAlive && cop.state === 'wandering'
+    );
+
+    // Sort by distance
+    availableCops.sort((a, b) => {
+      const distA = Math.sqrt(Math.pow(a.sprite.x - x, 2) + Math.pow(a.sprite.y - y, 2));
+      const distB = Math.sqrt(Math.pow(b.sprite.x - x, 2) + Math.pow(b.sprite.y - y, 2));
+      return distA - distB;
+    });
+
+    // Send up to 2 closest cops to investigate
+    const copsToSend = Math.min(2, availableCops.length);
+    for (let i = 0; i < copsToSend; i++) {
+      availableCops[i].assignInvestigation(x, y);
+    }
+
+    this.hud.showNotification('Cops called to investigate disturbance', 3000);
+  }
+
+  onBodyDiscovered(x, y, isCopBody) {
+    // Queue cop respawn when a body is discovered
+    this.queueCopRespawn(x, y, isCopBody);
+
+    // Send 2 closest available cops to investigate
+    const availableCops = this.police.filter(cop =>
+      cop.isAlive && cop.state === 'wandering'
+    );
+
+    // Sort by distance to body
+    availableCops.sort((a, b) => {
+      const distA = Math.sqrt(
+        Math.pow(a.sprite.x - x, 2) + Math.pow(a.sprite.y - y, 2)
+      );
+      const distB = Math.sqrt(
+        Math.pow(b.sprite.x - x, 2) + Math.pow(b.sprite.y - y, 2)
+      );
+      return distA - distB;
+    });
+
+    // Send up to 2 closest cops to investigate
+    const copsToSend = Math.min(2, availableCops.length);
+    for (let i = 0; i < copsToSend; i++) {
+      availableCops[i].assignInvestigation(x, y);
     }
   }
 

@@ -4,6 +4,10 @@ export class Player {
     this.speed = 80;
     this.canControl = true;
 
+    // Attack cooldown
+    this.attackCooldown = 1000; // 1 second
+    this.lastAttackTime = -1000; // Allow immediate first attack
+
     // Create the player sprite with physics
     this.sprite = scene.physics.add.sprite(x, y, 'player');
     this.sprite.setCollideWorldBounds(false);
@@ -34,9 +38,13 @@ export class Player {
   tryKill() {
     if (!this.canControl || this.scene.isGameOver) return;
 
+    const currentTime = this.scene.time.now;
     const killRange = 16; // 1 tile
+
+    // Find nearest target first (before checking cooldown)
     let nearestTarget = null;
     let nearestDistance = killRange;
+    let isTargetCop = false;
 
     // Check humans
     if (this.scene.humans) {
@@ -48,6 +56,7 @@ export class Player {
         if (distance < nearestDistance) {
           nearestDistance = distance;
           nearestTarget = human;
+          isTargetCop = false;
         }
       });
     }
@@ -62,23 +71,44 @@ export class Player {
         if (distance < nearestDistance) {
           nearestDistance = distance;
           nearestTarget = cop;
+          isTargetCop = true;
         }
       });
     }
 
-    // Kill the nearest target
-    if (nearestTarget) {
+    // Only allow attack if target in range AND cooldown complete
+    if (!nearestTarget) return;
+    if (currentTime - this.lastAttackTime < this.attackCooldown) return;
+
+    // Perform attack
+    this.lastAttackTime = currentTime;
+
+    // Update HUD cooldown display
+    if (this.scene.hud) {
+      this.scene.hud.triggerCooldown();
+    }
+
+    if (isTargetCop) {
+      // Cops take 2 hits to kill
+      nearestTarget.takeDamage();
+    } else {
+      // Humans die in 1 hit
       nearestTarget.kill();
 
-      // Check if it's a human and matches target preference
-      if (nearestTarget.hairColor !== undefined) {
-        // It's a human
-        if (nearestTarget.hairColor === this.scene.targetHairColor &&
-            nearestTarget.skinColor === this.scene.targetSkinColor) {
-          this.scene.addScore(1);
-        }
+      // Check if human matches target preference
+      if (nearestTarget.hairColor === this.scene.targetHairColor &&
+          nearestTarget.skinColor === this.scene.targetSkinColor) {
+        this.scene.addScore(1);
       }
     }
+  }
+
+  // Get cooldown progress (0 = ready, 1 = just attacked)
+  getCooldownProgress() {
+    const currentTime = this.scene.time.now;
+    const elapsed = currentTime - this.lastAttackTime;
+    if (elapsed >= this.attackCooldown) return 0;
+    return 1 - (elapsed / this.attackCooldown);
   }
 
   update() {

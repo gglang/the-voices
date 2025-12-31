@@ -5,6 +5,11 @@ export class HUD {
     // Store all UI elements for camera management
     this.uiElements = [];
 
+    // Cooldown state
+    this.cooldownActive = false;
+    this.cooldownStartTime = 0;
+    this.cooldownDuration = 1000;
+
     // Score display (top right)
     this.scoreText = scene.add.text(0, 0, 'Score: 0', {
       fontSize: '24px',
@@ -147,6 +152,30 @@ export class HUD {
     });
     this.uiElements.push(this.playAgainText);
 
+    // Knife icon background (bottom right)
+    this.knifeBackground = scene.add.graphics();
+    this.knifeBackground.setScrollFactor(0);
+    this.knifeBackground.setDepth(1000);
+    this.uiElements.push(this.knifeBackground);
+
+    // Knife cooldown overlay (the "sweeping" cooldown indicator)
+    this.knifeCooldown = scene.add.graphics();
+    this.knifeCooldown.setScrollFactor(0);
+    this.knifeCooldown.setDepth(1001);
+    this.uiElements.push(this.knifeCooldown);
+
+    // Knife icon (simple knife shape)
+    this.knifeIcon = scene.add.graphics();
+    this.knifeIcon.setScrollFactor(0);
+    this.knifeIcon.setDepth(1002);
+    this.uiElements.push(this.knifeIcon);
+
+    // Draw initial knife graphics
+    this.drawKnifeIcon();
+
+    // Update cooldown every frame
+    scene.events.on('update', this.updateCooldown, this);
+
     // Create a dedicated UI camera that only renders UI elements
     this.uiCamera = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height);
     this.uiCamera.setScroll(0, 0);
@@ -207,6 +236,82 @@ export class HUD {
     this.gameOverText.setPosition(width / 2, height / 2 - 50);
     this.finalScoreText.setPosition(width / 2, height / 2);
     this.playAgainText.setPosition(width / 2, height / 2 + 50);
+
+    // Knife icon (bottom right)
+    this.knifeX = width - padding - 20;
+    this.knifeY = height - padding - 20;
+    this.drawKnifeIcon();
+  }
+
+  drawKnifeIcon() {
+    if (!this.knifeBackground || !this.knifeIcon) return;
+
+    const x = this.knifeX || 0;
+    const y = this.knifeY || 0;
+    const radius = 18;
+
+    // Draw background circle
+    this.knifeBackground.clear();
+    this.knifeBackground.fillStyle(0x333333, 0.8);
+    this.knifeBackground.fillCircle(x, y, radius);
+    this.knifeBackground.lineStyle(2, 0x666666);
+    this.knifeBackground.strokeCircle(x, y, radius);
+
+    // Draw knife icon
+    this.knifeIcon.clear();
+    this.knifeIcon.fillStyle(0xcccccc);
+
+    // Blade (triangular)
+    this.knifeIcon.beginPath();
+    this.knifeIcon.moveTo(x - 2, y - 12);  // tip
+    this.knifeIcon.lineTo(x + 3, y - 2);   // right edge
+    this.knifeIcon.lineTo(x - 2, y - 2);   // left edge
+    this.knifeIcon.closePath();
+    this.knifeIcon.fillPath();
+
+    // Handle
+    this.knifeIcon.fillStyle(0x8B4513);  // brown
+    this.knifeIcon.fillRect(x - 3, y - 2, 6, 12);
+
+    // Handle guard
+    this.knifeIcon.fillStyle(0x666666);
+    this.knifeIcon.fillRect(x - 5, y - 3, 10, 3);
+  }
+
+  triggerCooldown() {
+    this.cooldownActive = true;
+    this.cooldownStartTime = this.scene.time.now;
+  }
+
+  updateCooldown() {
+    if (!this.cooldownActive || !this.knifeCooldown) return;
+
+    const elapsed = this.scene.time.now - this.cooldownStartTime;
+    const progress = Math.min(elapsed / this.cooldownDuration, 1);
+
+    if (progress >= 1) {
+      this.cooldownActive = false;
+      this.knifeCooldown.clear();
+      return;
+    }
+
+    const x = this.knifeX || 0;
+    const y = this.knifeY || 0;
+    const radius = 18;
+
+    // Draw cooldown overlay as a "pie slice" that shrinks
+    this.knifeCooldown.clear();
+    this.knifeCooldown.fillStyle(0x000000, 0.6);
+
+    // Calculate the arc from top (start) going clockwise
+    const startAngle = -Math.PI / 2; // Start at top
+    const endAngle = startAngle + (1 - progress) * Math.PI * 2;
+
+    this.knifeCooldown.beginPath();
+    this.knifeCooldown.moveTo(x, y);
+    this.knifeCooldown.arc(x, y, radius, startAngle, endAngle, false);
+    this.knifeCooldown.closePath();
+    this.knifeCooldown.fillPath();
   }
 
   setScore(score) {
@@ -246,6 +351,7 @@ export class HUD {
 
   destroy() {
     this.scene.scale.off('resize', this.updatePositions, this);
+    this.scene.events.off('update', this.updateCooldown, this);
     if (this.uiCamera) {
       this.scene.cameras.remove(this.uiCamera);
     }

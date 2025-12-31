@@ -10,6 +10,7 @@ export class Human {
     this.hairColor = hairColor;
     this.skinColor = skinColor;
     this.isAlive = true;
+    this.bodyDiscovered = false;
 
     // Create texture key based on colors
     const textureKey = `human_${hairColor}_${skinColor}`;
@@ -83,19 +84,27 @@ export class Human {
     if (!this.isAlive) return;
     this.isAlive = false;
 
-    // Queue cop respawn (3 cops in 30 seconds near this location)
-    this.scene.queueCopRespawn(this.sprite.x, this.sprite.y, true);
+    // Flash yellow to indicate damage
+    this.sprite.setTint(0xffff00);
+
+    // Alert nearby cops to investigate the disturbance
+    this.scene.alertCopsToDisturbance(this.sprite.x, this.sprite.y);
 
     // Blood splatter effect
     this.scene.spawnBloodSplatter(this.sprite.x, this.sprite.y);
 
-    // Fade out and destroy
-    this.scene.tweens.add({
-      targets: this.sprite,
-      alpha: 0,
-      duration: 300,
-      onComplete: () => {
-        this.sprite.destroy();
+    // Fade out and destroy after brief flash
+    this.scene.time.delayedCall(100, () => {
+      if (this.sprite && this.sprite.active) {
+        this.sprite.clearTint();
+        this.scene.tweens.add({
+          targets: this.sprite,
+          alpha: 0,
+          duration: 300,
+          onComplete: () => {
+            this.sprite.destroy();
+          }
+        });
       }
     });
   }
