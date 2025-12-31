@@ -2,6 +2,7 @@ export class Player {
   constructor(scene, x, y) {
     this.scene = scene;
     this.speed = 80;
+    this.canControl = true;
 
     // Create the player sprite with physics
     this.sprite = scene.physics.add.sprite(x, y, 'player');
@@ -18,6 +19,10 @@ export class Player {
       right: Phaser.Input.Keyboard.KeyCodes.D
     });
 
+    // Spacebar for killing
+    this.spaceKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.spaceKey.on('down', () => this.tryKill());
+
     // Set up collision with walls after they're created
     scene.events.once('update', () => {
       if (scene.walls) {
@@ -26,7 +31,62 @@ export class Player {
     });
   }
 
+  tryKill() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    const killRange = 16; // 1 tile
+    let nearestTarget = null;
+    let nearestDistance = killRange;
+
+    // Check humans
+    if (this.scene.humans) {
+      this.scene.humans.forEach(human => {
+        if (!human.isAlive) return;
+        const dx = human.sprite.x - this.sprite.x;
+        const dy = human.sprite.y - this.sprite.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestTarget = human;
+        }
+      });
+    }
+
+    // Check police
+    if (this.scene.police) {
+      this.scene.police.forEach(cop => {
+        if (!cop.isAlive) return;
+        const dx = cop.sprite.x - this.sprite.x;
+        const dy = cop.sprite.y - this.sprite.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestTarget = cop;
+        }
+      });
+    }
+
+    // Kill the nearest target
+    if (nearestTarget) {
+      nearestTarget.kill();
+
+      // Check if it's a human and matches target preference
+      if (nearestTarget.hairColor !== undefined) {
+        // It's a human
+        if (nearestTarget.hairColor === this.scene.targetHairColor &&
+            nearestTarget.skinColor === this.scene.targetSkinColor) {
+          this.scene.addScore(1);
+        }
+      }
+    }
+  }
+
   update() {
+    if (!this.canControl) {
+      this.sprite.setVelocity(0, 0);
+      return;
+    }
+
     const velocity = { x: 0, y: 0 };
 
     // Horizontal movement
@@ -50,5 +110,10 @@ export class Player {
     }
 
     this.sprite.setVelocity(velocity.x, velocity.y);
+  }
+
+  disableControl() {
+    this.canControl = false;
+    this.sprite.setVelocity(0, 0);
   }
 }
