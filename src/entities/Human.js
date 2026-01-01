@@ -1,41 +1,46 @@
 import Phaser from 'phaser';
+import { HUMAN, IDENTIFICATION } from '../config/constants.js';
+import { LineOfSight } from '../utils/LineOfSight.js';
 
+/**
+ * Human NPC entity with wandering behavior and corpse/crime detection
+ */
 export class Human {
   constructor(scene, x, y, hairColor, skinColor) {
     this.scene = scene;
-    this.speed = 80;
+    this.speed = HUMAN.SPEED;
     this.spawnX = x;
     this.spawnY = y;
-    this.wanderRadius = 5 * 16; // 5 tiles in pixels
+    this.wanderRadius = HUMAN.WANDER_RADIUS;
     this.hairColor = hairColor;
     this.skinColor = skinColor;
     this.isAlive = true;
-    this.bodyDiscovered = false;
+    this.hasSeenCorpse = false;
 
-    // Create texture key based on colors
-    const textureKey = `human_${hairColor}_${skinColor}`;
+    this.createSprite(x, y);
+    this.initializeWandering();
+  }
 
-    // Create the sprite with physics
-    this.sprite = scene.physics.add.sprite(x, y, textureKey);
+  createSprite(x, y) {
+    const textureKey = `human_${this.hairColor}_${this.skinColor}`;
+    this.sprite = this.scene.physics.add.sprite(x, y, textureKey);
     this.sprite.setCollideWorldBounds(true);
     this.sprite.body.setSize(12, 12);
     this.sprite.body.setOffset(2, 4);
-
-    // Store reference to this Human on the sprite for easy access
     this.sprite.parentEntity = this;
+  }
 
-    // Wandering state
-    this.targetX = x;
-    this.targetY = y;
+  initializeWandering() {
+    this.targetX = this.spawnX;
+    this.targetY = this.spawnY;
     this.waitTimer = 0;
     this.isWaiting = true;
-
-    // Pick first wander target
     this.pickNewTarget();
   }
 
+  // ==================== Wandering Behavior ====================
+
   pickNewTarget() {
-    // Pick random point within wander radius of spawn
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.random() * this.wanderRadius;
 
@@ -50,9 +55,17 @@ export class Human {
     this.isWaiting = false;
   }
 
+  // ==================== Update Loop ====================
+
   update(delta) {
     if (!this.isAlive || !this.sprite.active) return;
 
+    this.checkForCorpses();
+    this.checkForIllegalActivity();
+    this.updateMovement(delta);
+  }
+
+  updateMovement(delta) {
     if (this.isWaiting) {
       this.waitTimer -= delta;
       if (this.waitTimer <= 0) {
@@ -62,49 +75,97 @@ export class Human {
       return;
     }
 
-    // Move towards target
     const dx = this.targetX - this.sprite.x;
     const dy = this.targetY - this.sprite.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance < 8) {
-      // Reached target, wait for 1-3 seconds
       this.isWaiting = true;
-      this.waitTimer = Phaser.Math.Between(1000, 3000);
+      this.waitTimer = Phaser.Math.Between(
+        HUMAN.WAIT_TIME_MIN,
+        HUMAN.WAIT_TIME_MAX
+      );
       this.sprite.setVelocity(0, 0);
     } else {
-      // Move towards target
       const vx = (dx / distance) * this.speed;
       const vy = (dy / distance) * this.speed;
       this.sprite.setVelocity(vx, vy);
     }
   }
 
+  // ==================== Detection Systems ====================
+
+  checkForCorpses() {
+    if (this.hasSeenCorpse) return;
+
+    for (const corpse of this.scene.corpses) {
+      // Skip picked up or already investigated corpses
+      if (corpse.isPickedUp || corpse.investigated) continue;
+
+      const distance = LineOfSight.distance(
+        this.sprite.x, this.sprite.y,
+        corpse.x, corpse.y
+      );
+
+      if (distance < HUMAN.CORPSE_DETECT_RANGE) {
+        if (LineOfSight.hasLineOfSight(
+          this.sprite.x, this.sprite.y,
+          corpse.x, corpse.y,
+          this.scene.walls
+        )) {
+          this.hasSeenCorpse = true;
+          // Mark corpse as being investigated so only one cop responds
+          corpse.investigated = true;
+          this.scene.alertCopsToDisturbance(corpse.x, corpse.y);
+          break;
+        }
+      }
+    }
+  }
+
+  checkForIllegalActivity() {
+    if (this.scene.playerIdentified) return;
+
+    const player = this.scene.player;
+    if (!player?.sprite) return;
+
+    const distance = LineOfSight.distance(
+      this.sprite.x, this.sprite.y,
+      player.sprite.x, player.sprite.y
+    );
+
+    if (distance < IDENTIFICATION.IDENTIFY_RANGE) {
+      if (LineOfSight.hasLineOfSight(
+        this.sprite.x, this.sprite.y,
+        player.sprite.x, player.sprite.y,
+        this.scene.walls
+      )) {
+        if (this.scene.isPlayerDoingIllegalActivity()) {
+          this.scene.identifyPlayer(this.sprite);
+        }
+      }
+    }
+  }
+
+  // ==================== Death ====================
+
   kill() {
     if (!this.isAlive) return;
     this.isAlive = false;
 
-    // Flash yellow to indicate damage
     this.sprite.setTint(0xffff00);
 
-    // Alert nearby cops to investigate the disturbance
-    this.scene.alertCopsToDisturbance(this.sprite.x, this.sprite.y);
+    const deathX = this.sprite.x;
+    const deathY = this.sprite.y;
 
-    // Blood splatter effect
-    this.scene.spawnBloodSplatter(this.sprite.x, this.sprite.y);
+    this.scene.spawnBloodSplatter(deathX, deathY);
 
-    // Fade out and destroy after brief flash
+    const corpseTextureKey = `corpse_${this.hairColor}_${this.skinColor}`;
+    this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, false, this.hairColor, this.skinColor);
+
     this.scene.time.delayedCall(100, () => {
-      if (this.sprite && this.sprite.active) {
-        this.sprite.clearTint();
-        this.scene.tweens.add({
-          targets: this.sprite,
-          alpha: 0,
-          duration: 300,
-          onComplete: () => {
-            this.sprite.destroy();
-          }
-        });
+      if (this.sprite?.active) {
+        this.sprite.destroy();
       }
     });
   }
