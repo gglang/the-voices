@@ -27,6 +27,7 @@ export class Player {
     this.sprite.setCollideWorldBounds(false);
     this.sprite.body.setSize(12, 12);
     this.sprite.body.setOffset(2, 4);
+    this.sprite.setDepth(DEPTH.PLAYER);
   }
 
   setupInput() {

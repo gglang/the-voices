@@ -3,13 +3,15 @@ import { Player } from '../entities/Player.js';
 import { Human } from '../entities/Human.js';
 import { Police } from '../entities/Police.js';
 import { HUD } from '../ui/HUD.js';
+import { Minimap } from '../ui/Minimap.js';
 import { TextureFactory } from '../utils/TextureFactory.js';
 import { CorpseManager } from '../systems/CorpseManager.js';
 import { IdentificationSystem } from '../systems/IdentificationSystem.js';
 import { RitualSystem } from '../systems/RitualSystem.js';
 import { PoliceDispatcher } from '../systems/PoliceDispatcher.js';
+import { TownGenerator } from '../systems/TownGenerator.js';
 import {
-  MAP, HUMAN, POLICE, DEPTH,
+  MAP, DEPTH, TOWN,
   HAIR_COLORS, SKIN_COLORS
 } from '../config/constants.js';
 
@@ -29,9 +31,10 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.initializeGameState();
     this.initializeSystems();
-    this.createWorld();
+    this.createTown();
     this.spawnEntities();
     this.createHUD();
+    this.createMinimap();
   }
 
   /**
@@ -58,28 +61,32 @@ export class GameScene extends Phaser.Scene {
     this.identificationSystem = new IdentificationSystem(this);
     this.ritualSystem = new RitualSystem(this);
     this.policeDispatcher = new PoliceDispatcher(this);
+    this.townGenerator = new TownGenerator(this);
   }
 
   /**
-   * Create the game world
+   * Create the town using TownGenerator
    */
-  createWorld() {
+  createTown() {
     const mapPixelWidth = this.mapWidth * this.tileSize;
     const mapPixelHeight = this.mapHeight * this.tileSize;
 
     this.physics.world.setBounds(0, 0, mapPixelWidth, mapPixelHeight);
 
-    this.createFloor();
-    this.createWalls();
+    // Create walls group before town generation
+    this.walls = this.physics.add.staticGroup();
 
-    // Create player at center
+    // Generate the town
+    this.townData = this.townGenerator.generate(this.mapWidth, this.mapHeight);
+
+    // Find a good spawn point for player (near town center, on road)
     const centerX = mapPixelWidth / 2;
     const centerY = mapPixelHeight / 2;
     this.player = new Player(this, centerX, centerY);
 
     // Set up camera
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
-    this.cameras.main.setBackgroundColor('#2d1b2e');
+    this.cameras.main.setBackgroundColor('#2d5a1e'); // Green grass color
     this.cameras.main.setBounds(0, 0, mapPixelWidth, mapPixelHeight);
     this.cameras.main.setZoom(4);
 
@@ -92,6 +99,7 @@ export class GameScene extends Phaser.Scene {
   spawnEntities() {
     this.spawnHumans();
     this.spawnPolice();
+    // Spawn ritual sites in remote areas (corners of map)
     this.ritualSystem.spawnSites(this.mapWidth, this.mapHeight, this.tileSize, this.walls);
   }
 
@@ -104,6 +112,16 @@ export class GameScene extends Phaser.Scene {
     this.hud.setScore(0);
   }
 
+  /**
+   * Create the minimap
+   */
+  createMinimap() {
+    if (this.townData) {
+      this.minimap = new Minimap(this, this.townData);
+      this.minimap.registerWithHUD(this.hud);
+    }
+  }
+
   update(time, delta) {
     if (this.isGameOver) return;
 
@@ -111,68 +129,18 @@ export class GameScene extends Phaser.Scene {
     this.humans.forEach(human => human.update(delta));
     this.police.forEach(cop => cop.update(delta));
     this.policeDispatcher.processQueue(time);
-  }
 
-  // ==================== World Creation ====================
-
-  createFloor() {
-    for (let x = 0; x < this.mapWidth; x++) {
-      for (let y = 0; y < this.mapHeight; y++) {
-        this.add.image(x * this.tileSize + 8, y * this.tileSize + 8, 'floor');
-      }
-    }
-  }
-
-  createWalls() {
-    this.walls = this.physics.add.staticGroup();
-
-    // Perimeter walls
-    for (let x = 0; x < this.mapWidth; x++) {
-      this.walls.create(x * this.tileSize + 8, 8, 'wall');
-      this.walls.create(x * this.tileSize + 8, (this.mapHeight - 1) * this.tileSize + 8, 'wall');
-    }
-    for (let y = 1; y < this.mapHeight - 1; y++) {
-      this.walls.create(8, y * this.tileSize + 8, 'wall');
-      this.walls.create((this.mapWidth - 1) * this.tileSize + 8, y * this.tileSize + 8, 'wall');
-    }
-
-    this.generateRandomObstacles();
-  }
-
-  generateRandomObstacles() {
-    const centerX = this.mapWidth / 2;
-    const centerY = this.mapHeight / 2;
-
-    for (let i = 0; i < MAP.OBSTACLE_COUNT; i++) {
-      const tileX = Phaser.Math.Between(2, this.mapWidth - 3);
-      const tileY = Phaser.Math.Between(2, this.mapHeight - 3);
-
-      const distFromCenter = Math.sqrt(
-        Math.pow(tileX - centerX, 2) + Math.pow(tileY - centerY, 2)
+    // Update roof visibility based on player position
+    if (this.townGenerator && this.player?.sprite) {
+      this.townGenerator.updateRoofVisibility(
+        this.player.sprite.x,
+        this.player.sprite.y
       );
-      if (distFromCenter < MAP.SAFE_SPAWN_RADIUS) continue;
+    }
 
-      const clusterSize = Phaser.Math.Between(1, 4);
-      const clusterType = Phaser.Math.Between(0, 2);
-
-      for (let j = 0; j < clusterSize; j++) {
-        let offsetX = 0, offsetY = 0;
-
-        if (clusterType === 0) offsetX = j;
-        else if (clusterType === 1) offsetY = j;
-        else {
-          if (j < 2) offsetX = j;
-          else offsetY = j - 1;
-        }
-
-        const finalX = tileX + offsetX;
-        const finalY = tileY + offsetY;
-
-        if (finalX > 1 && finalX < this.mapWidth - 2 &&
-            finalY > 1 && finalY < this.mapHeight - 2) {
-          this.walls.create(finalX * this.tileSize + 8, finalY * this.tileSize + 8, 'wall');
-        }
-      }
+    // Update minimap
+    if (this.minimap) {
+      this.minimap.update();
     }
   }
 
@@ -181,24 +149,21 @@ export class GameScene extends Phaser.Scene {
   spawnHumans() {
     const hairColors = Object.values(HAIR_COLORS);
     const skinColors = Object.values(SKIN_COLORS);
-    const centerX = this.mapWidth / 2;
-    const centerY = this.mapHeight / 2;
+    const houses = this.townGenerator.getHouses();
+
     let spawnIndex = 0;
 
-    for (let gridX = 0; gridX < this.mapWidth; gridX += HUMAN.SPAWN_GRID_SIZE) {
-      for (let gridY = 0; gridY < this.mapHeight; gridY += HUMAN.SPAWN_GRID_SIZE) {
-        const tileX = gridX + Phaser.Math.Between(2, HUMAN.SPAWN_GRID_SIZE - 3);
-        const tileY = gridY + Phaser.Math.Between(2, HUMAN.SPAWN_GRID_SIZE - 3);
+    // Spawn 1-3 humans per house
+    for (const house of houses) {
+      const humansInHouse = Phaser.Math.Between(
+        TOWN.HUMANS_PER_HOUSE_MIN,
+        TOWN.HUMANS_PER_HOUSE_MAX
+      );
 
-        const distFromCenter = Math.sqrt(
-          Math.pow(tileX - centerX, 2) + Math.pow(tileY - centerY, 2)
-        );
-        if (distFromCenter < 8) continue;
-
-        const x = tileX * this.tileSize + 8;
-        const y = tileY * this.tileSize + 8;
-
+      for (let h = 0; h < humansInHouse; h++) {
         let hairColor, skinColor;
+
+        // Every 3rd human matches the target preference
         if (spawnIndex % 3 === 0) {
           hairColor = this.targetHairColor;
           skinColor = this.targetSkinColor;
@@ -209,31 +174,45 @@ export class GameScene extends Phaser.Scene {
           } while (hairColor === this.targetHairColor && skinColor === this.targetSkinColor);
         }
 
-        const human = new Human(this, x, y, hairColor, skinColor);
+        // Offset spawn position slightly for multiple humans
+        const offsetX = (h - 1) * 8;
+        const offsetY = (h % 2) * 8;
+
+        const human = new Human(
+          this,
+          house.centerPixelX + offsetX,
+          house.centerPixelY + offsetY,
+          hairColor,
+          skinColor,
+          house
+        );
+
         this.humans.push(human);
         this.physics.add.collider(human.sprite, this.walls);
+
+        if (this.hud) {
+          this.hud.ignoreGameObject(human.sprite);
+        }
+
         spawnIndex++;
       }
     }
   }
 
   spawnPolice() {
-    const centerX = this.mapWidth / 2;
-    const centerY = this.mapHeight / 2;
+    // Get police station spawn point
+    const spawnPoint = this.townGenerator.getPoliceSpawnPoint();
 
-    for (let gridX = 0; gridX < this.mapWidth; gridX += POLICE.SPAWN_GRID_SIZE) {
-      for (let gridY = 0; gridY < this.mapHeight; gridY += POLICE.SPAWN_GRID_SIZE) {
-        const tileX = gridX + Phaser.Math.Between(5, POLICE.SPAWN_GRID_SIZE - 6);
-        const tileY = gridY + Phaser.Math.Between(5, POLICE.SPAWN_GRID_SIZE - 6);
+    if (spawnPoint) {
+      // Store spawn point for police dispatcher
+      this.policeSpawnPoint = spawnPoint;
 
-        const distFromCenter = Math.sqrt(
-          Math.pow(tileX - centerX, 2) + Math.pow(tileY - centerY, 2)
-        );
-        if (distFromCenter < 10) continue;
-
-        const x = tileX * this.tileSize + 8;
-        const y = tileY * this.tileSize + 8;
-        this.spawnSingleCop(x, y);
+      // Spawn initial police force from station
+      for (let i = 0; i < TOWN.INITIAL_COP_COUNT; i++) {
+        // Offset slightly so they don't stack
+        const offsetX = (i % 3 - 1) * 20;
+        const offsetY = Math.floor(i / 3) * 20;
+        this.spawnSingleCop(spawnPoint.x + offsetX, spawnPoint.y + offsetY);
       }
     }
   }
@@ -249,6 +228,8 @@ export class GameScene extends Phaser.Scene {
         this.hud.ignoreGameObject(cop.healthBar);
       }
     }
+
+    return cop;
   }
 
   // ==================== Public API for Systems ====================

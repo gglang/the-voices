@@ -11,6 +11,13 @@ export class PoliceDispatcher {
   }
 
   /**
+   * Get police station spawn point
+   */
+  getSpawnPoint() {
+    return this.scene.policeSpawnPoint || null;
+  }
+
+  /**
    * Queue backup cops after a body is confirmed by investigating officer
    */
   queueBackup(x, y, isPoliceBody = false) {
@@ -70,17 +77,35 @@ export class PoliceDispatcher {
   }
 
   /**
-   * Spawn backup cops at location
+   * Spawn backup cops from police station
    */
   spawnBackup(entry) {
-    const bounds = this.scene.physics.world.bounds;
+    const spawnPoint = this.getSpawnPoint();
 
     for (let i = 0; i < POLICE.BACKUP_COUNT; i++) {
-      const offsetX = Phaser.Math.Between(-50, 50);
-      const offsetY = Phaser.Math.Between(-50, 50);
-      const x = Phaser.Math.Clamp(entry.x + offsetX, bounds.x + 32, bounds.right - 32);
-      const y = Phaser.Math.Clamp(entry.y + offsetY, bounds.y + 32, bounds.bottom - 32);
-      this.scene.spawnSingleCop(x, y);
+      let x, y;
+
+      if (spawnPoint) {
+        // Spawn from police station with slight offset
+        const offsetX = Phaser.Math.Between(-20, 20);
+        const offsetY = Phaser.Math.Between(0, 30);
+        x = spawnPoint.x + offsetX;
+        y = spawnPoint.y + offsetY;
+      } else {
+        // Fallback: spawn near the incident
+        const bounds = this.scene.physics.world.bounds;
+        const offsetX = Phaser.Math.Between(-50, 50);
+        const offsetY = Phaser.Math.Between(-50, 50);
+        x = Phaser.Math.Clamp(entry.x + offsetX, bounds.x + 32, bounds.right - 32);
+        y = Phaser.Math.Clamp(entry.y + offsetY, bounds.y + 32, bounds.bottom - 32);
+      }
+
+      const cop = this.scene.spawnSingleCop(x, y);
+
+      // Send the cop to investigate the incident location
+      if (cop && spawnPoint) {
+        cop.assignInvestigation(entry.x, entry.y);
+      }
     }
 
     this.scene.hud?.showNotification('Backup has arrived!', 3000);

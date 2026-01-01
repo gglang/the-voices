@@ -6,16 +6,26 @@ import { LineOfSight } from '../utils/LineOfSight.js';
  * Human NPC entity with wandering behavior and corpse/crime detection
  */
 export class Human {
-  constructor(scene, x, y, hairColor, skinColor) {
+  constructor(scene, x, y, hairColor, skinColor, homeBuilding = null) {
     this.scene = scene;
     this.speed = HUMAN.SPEED;
-    this.spawnX = x;
-    this.spawnY = y;
-    this.wanderRadius = HUMAN.WANDER_RADIUS;
     this.hairColor = hairColor;
     this.skinColor = skinColor;
     this.isAlive = true;
     this.hasSeenCorpse = false;
+
+    // Home building for wandering
+    this.homeBuilding = homeBuilding;
+    if (homeBuilding) {
+      // Wander around home (5 tiles radius)
+      this.spawnX = homeBuilding.centerPixelX;
+      this.spawnY = homeBuilding.centerPixelY;
+      this.wanderRadius = 5 * 16; // 5 tiles
+    } else {
+      this.spawnX = x;
+      this.spawnY = y;
+      this.wanderRadius = HUMAN.WANDER_RADIUS;
+    }
 
     this.createSprite(x, y);
     this.initializeWandering();

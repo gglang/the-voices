@@ -24,6 +24,21 @@ export class TextureFactory {
     this.createAllHumans();
     this.createAllCorpses();
     this.createPoliceCorpse();
+    // Town textures
+    this.createRoad();
+    this.createGrass();
+    this.createHouseWall();
+    this.createHouseFloor();
+    this.createHouseRoof();
+    this.createDoor();
+    this.createPoliceStationWall();
+    this.createPoliceStationRoof();
+    this.createStoreWall();
+    this.createStoreRoof();
+    this.createFountain();
+    this.createTree();
+    this.createFurniture();
+    this.createPoliceSign();
   }
 
   /**
@@ -300,5 +315,289 @@ export class TextureFactory {
     g.fillRect(4, 12, 3, 4);
     g.fillRect(9, 12, 3, 4);
     g.generateTexture(key, 16, 16);
+  }
+
+  // ==================== Town Textures ====================
+
+  /**
+   * Road tile texture
+   */
+  createRoad() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Asphalt base
+    g.fillStyle(0x3a3a3a);
+    g.fillRect(0, 0, 16, 16);
+    // Subtle texture variation
+    g.fillStyle(0x404040);
+    g.fillRect(2, 2, 4, 4);
+    g.fillRect(10, 8, 4, 4);
+    g.fillStyle(0x353535);
+    g.fillRect(6, 10, 3, 3);
+    g.generateTexture('road', 16, 16);
+  }
+
+  /**
+   * Grass tile texture
+   */
+  createGrass() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Base grass
+    g.fillStyle(0x2d5a1e);
+    g.fillRect(0, 0, 16, 16);
+    // Grass variation
+    g.fillStyle(0x3d6a2e);
+    g.fillRect(1, 1, 3, 2);
+    g.fillRect(8, 5, 4, 2);
+    g.fillRect(3, 11, 3, 2);
+    g.fillStyle(0x1d4a0e);
+    g.fillRect(12, 2, 2, 2);
+    g.fillRect(5, 8, 2, 2);
+    g.generateTexture('grass', 16, 16);
+  }
+
+  /**
+   * House wall texture (brown wood)
+   */
+  createHouseWall() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Wood planks
+    g.fillStyle(0x8B4513);
+    g.fillRect(0, 0, 16, 16);
+    // Plank lines
+    g.lineStyle(1, 0x6B3503);
+    g.lineBetween(0, 4, 16, 4);
+    g.lineBetween(0, 8, 16, 8);
+    g.lineBetween(0, 12, 16, 12);
+    // Vertical detail
+    g.lineBetween(8, 0, 8, 16);
+    g.generateTexture('house_wall', 16, 16);
+  }
+
+  /**
+   * House floor texture (wooden planks)
+   */
+  createHouseFloor() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Wood floor
+    g.fillStyle(0xA0522D);
+    g.fillRect(0, 0, 16, 16);
+    // Plank lines
+    g.lineStyle(1, 0x8B4513);
+    g.lineBetween(0, 0, 16, 0);
+    g.lineBetween(4, 0, 4, 16);
+    g.lineBetween(12, 0, 12, 16);
+    g.generateTexture('house_floor', 16, 16);
+  }
+
+  /**
+   * House roof texture
+   */
+  createHouseRoof() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Roof shingles
+    g.fillStyle(0x8B0000);
+    g.fillRect(0, 0, 16, 16);
+    // Shingle pattern
+    g.fillStyle(0x6B0000);
+    g.fillRect(0, 0, 8, 4);
+    g.fillRect(8, 4, 8, 4);
+    g.fillRect(0, 8, 8, 4);
+    g.fillRect(8, 12, 8, 4);
+    g.generateTexture('house_roof', 16, 16);
+  }
+
+  /**
+   * Door texture
+   */
+  createDoor() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Door frame
+    g.fillStyle(0x4a3728);
+    g.fillRect(0, 0, 16, 16);
+    // Door
+    g.fillStyle(0x5c4033);
+    g.fillRect(2, 0, 12, 14);
+    // Door handle
+    g.fillStyle(0xffd700);
+    g.fillCircle(11, 8, 2);
+    g.generateTexture('door', 16, 16);
+  }
+
+  /**
+   * Police station wall texture (blue brick)
+   */
+  createPoliceStationWall() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Blue brick
+    g.fillStyle(0x1a237e);
+    g.fillRect(0, 0, 16, 16);
+    // Brick pattern
+    g.lineStyle(1, 0x0d1642);
+    g.lineBetween(0, 4, 16, 4);
+    g.lineBetween(0, 8, 16, 8);
+    g.lineBetween(0, 12, 16, 12);
+    g.lineBetween(8, 0, 8, 4);
+    g.lineBetween(4, 4, 4, 8);
+    g.lineBetween(12, 4, 12, 8);
+    g.lineBetween(8, 8, 8, 12);
+    g.lineBetween(4, 12, 4, 16);
+    g.lineBetween(12, 12, 12, 16);
+    g.generateTexture('police_wall', 16, 16);
+  }
+
+  /**
+   * Police station roof texture
+   */
+  createPoliceStationRoof() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Gray roof
+    g.fillStyle(0x444444);
+    g.fillRect(0, 0, 16, 16);
+    // Pattern
+    g.fillStyle(0x333333);
+    g.fillRect(0, 0, 8, 8);
+    g.fillRect(8, 8, 8, 8);
+    g.generateTexture('police_roof', 16, 16);
+  }
+
+  /**
+   * Store wall texture (tan/beige)
+   */
+  createStoreWall() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Beige wall
+    g.fillStyle(0xdaa520);
+    g.fillRect(0, 0, 16, 16);
+    // Window detail
+    g.fillStyle(0x87ceeb);
+    g.fillRect(3, 3, 10, 8);
+    g.fillStyle(0xffffff);
+    g.fillRect(4, 4, 3, 3);
+    g.generateTexture('store_wall', 16, 16);
+  }
+
+  /**
+   * Store roof texture
+   */
+  createStoreRoof() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Striped awning
+    g.fillStyle(0xff4444);
+    g.fillRect(0, 0, 16, 16);
+    g.fillStyle(0xffffff);
+    g.fillRect(0, 0, 4, 16);
+    g.fillRect(8, 0, 4, 16);
+    g.generateTexture('store_roof', 16, 16);
+  }
+
+  /**
+   * Fountain texture (for town square)
+   */
+  createFountain() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    const size = 32;
+    // Stone base
+    g.fillStyle(0x666666);
+    g.fillCircle(16, 16, 14);
+    // Water
+    g.fillStyle(0x4169e1);
+    g.fillCircle(16, 16, 10);
+    // Center pillar
+    g.fillStyle(0x888888);
+    g.fillCircle(16, 16, 4);
+    // Water spray effect
+    g.fillStyle(0x87ceeb);
+    g.fillCircle(16, 12, 2);
+    g.fillCircle(14, 14, 1);
+    g.fillCircle(18, 14, 1);
+    g.generateTexture('fountain', size, size);
+  }
+
+  /**
+   * Tree texture
+   */
+  createTree() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Trunk
+    g.fillStyle(0x5c4033);
+    g.fillRect(6, 10, 4, 6);
+    // Foliage
+    g.fillStyle(0x228b22);
+    g.fillCircle(8, 6, 6);
+    g.fillStyle(0x2e8b2e);
+    g.fillCircle(6, 5, 4);
+    g.fillCircle(10, 5, 4);
+    g.generateTexture('tree', 16, 16);
+  }
+
+  /**
+   * Furniture textures
+   */
+  createFurniture() {
+    // Bed
+    let g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    g.fillStyle(0x8B4513);
+    g.fillRect(0, 0, 16, 24);
+    g.fillStyle(0xffffff);
+    g.fillRect(2, 2, 12, 8);
+    g.fillStyle(0x4169e1);
+    g.fillRect(2, 10, 12, 12);
+    g.generateTexture('furniture_bed', 16, 24);
+
+    // Table
+    g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    g.fillStyle(0x8B4513);
+    g.fillRect(0, 0, 16, 16);
+    g.fillStyle(0xA0522D);
+    g.fillRect(2, 2, 12, 12);
+    g.generateTexture('furniture_table', 16, 16);
+
+    // Chair
+    g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    g.fillStyle(0x8B4513);
+    g.fillRect(2, 0, 12, 4);
+    g.fillRect(4, 4, 8, 8);
+    g.generateTexture('furniture_chair', 16, 12);
+  }
+
+  /**
+   * Police sign texture
+   */
+  createPoliceSign() {
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Sign background (blue)
+    g.fillStyle(0x1a237e);
+    g.fillRect(0, 0, 32, 12);
+    // Border
+    g.lineStyle(1, 0xffd700);
+    g.strokeRect(0, 0, 32, 12);
+    // "POLICE" text effect (simplified as white blocks)
+    g.fillStyle(0xffffff);
+    // P
+    g.fillRect(2, 2, 1, 8);
+    g.fillRect(3, 2, 2, 1);
+    g.fillRect(3, 5, 2, 1);
+    g.fillRect(5, 3, 1, 2);
+    // O
+    g.fillRect(7, 2, 1, 8);
+    g.fillRect(11, 2, 1, 8);
+    g.fillRect(8, 2, 3, 1);
+    g.fillRect(8, 9, 3, 1);
+    // L
+    g.fillRect(13, 2, 1, 8);
+    g.fillRect(14, 9, 3, 1);
+    // I
+    g.fillRect(18, 2, 1, 8);
+    // C
+    g.fillRect(20, 2, 1, 8);
+    g.fillRect(21, 2, 3, 1);
+    g.fillRect(21, 9, 3, 1);
+    // E
+    g.fillRect(25, 2, 1, 8);
+    g.fillRect(26, 2, 3, 1);
+    g.fillRect(26, 5, 2, 1);
+    g.fillRect(26, 9, 3, 1);
+
+    g.generateTexture('police_sign', 32, 12);
   }
 }

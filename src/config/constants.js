@@ -91,14 +91,63 @@ export const EFFECTS = {
 // Depth layers for rendering order
 export const DEPTH = {
   FLOOR: 0,
+  ROAD: 0.25,
   RITUAL_SITE: 0.5,
   BLOOD: 1,
   CORPSE: 2,
+  FURNITURE: 5,
   NPC: 10,
   PLAYER: 10,
+  WALLS: 15,
   HEALTH_BAR: 50,
   EFFECTS: 50,
+  ROOF: 80,
   CARRIED_CORPSE: 100,
   CAGE: 100,
   EXCLAMATION: 150
+};
+
+// Town generation settings
+export const TOWN = {
+  // Building sizes (in tiles)
+  HOUSE_WIDTH: 6,
+  HOUSE_HEIGHT: 6,
+  POLICE_STATION_WIDTH: 10,
+  POLICE_STATION_HEIGHT: 8,
+  STORE_WIDTH: 8,
+  STORE_HEIGHT: 6,
+
+  // Road dimensions
+  ROAD_WIDTH: 3,
+  MAIN_ROAD_WIDTH: 4,
+
+  // Town layout
+  BLOCK_SIZE: 20,          // tiles per block (house + yard + road)
+  TOWN_SQUARE_SIZE: 14,    // tiles
+
+  // Generation
+  HUMANS_PER_HOUSE_MIN: 1,
+  HUMANS_PER_HOUSE_MAX: 3,
+  TREE_DENSITY: 0.03,
+  INITIAL_COP_COUNT: 6
+};
+
+// Minimap settings
+export const MINIMAP = {
+  WIDTH: 120,
+  HEIGHT: 120,
+  PADDING: 10,
+  BORDER_WIDTH: 2,
+  COLORS: {
+    BACKGROUND: 0x1a1a1a,
+    BORDER: 0x444444,
+    PLAYER: 0x00ff00,
+    CORPSE: 0xff0000,
+    BUILDING: 0x8B4513,
+    POLICE_STATION: 0x1a237e,
+    STORE: 0xdaa520,
+    ROAD: 0x555555,
+    RITUAL_SITE: 0x8800cc,
+    TREE: 0x228b22
+  }
 };
