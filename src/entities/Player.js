@@ -82,10 +82,23 @@ export class Player {
 
     this.spaceKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.spaceKey.on('down', () => this.handleSpaceAction());
+
+    // T key for secondary actions (knock, talk, close door)
+    this.tKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T);
+    this.tKey.on('down', () => this.handleTAction());
+
+    // F key for Follow Me action
+    this.fKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+    this.fKey.on('down', () => this.handleFAction());
   }
 
   handleSpaceAction() {
     if (!this.canControl || this.scene.isGameOver) return;
+
+    // Check if ActionSystem has a SPACE action to execute
+    if (this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.SPACE)) {
+      return;
+    }
 
     for (const actionDef of this.spaceActions) {
       if (actionDef.condition()) {
@@ -93,6 +106,20 @@ export class Player {
         return;
       }
     }
+  }
+
+  handleTAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // Check if ActionSystem has a T action to execute
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.T);
+  }
+
+  handleFAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // Check if ActionSystem has an F action to execute (Follow Me)
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.F);
   }
 
   // ==================== Attack System ====================

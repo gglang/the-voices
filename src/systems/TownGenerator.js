@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TOWN, DEPTH, MAP } from '../config/constants.js';
+import { Door } from '../entities/Door.js';
 
 /**
  * Procedural town generator with buildings, roads, and decorations
@@ -151,11 +152,12 @@ export class TownGenerator {
       }
     }
 
-    // Fountain in center
+    // Fountain in center - mark as obstacle in grid
     this.fountain = {
       x: cx * this.tileSize,
       y: cy * this.tileSize
     };
+    this.grid[cx][cy] = { type: 'fountain', buildingId: null };
   }
 
   /**
@@ -411,11 +413,19 @@ export class TownGenerator {
 
         // Perimeter walls
         if (tx === x || tx === x + width - 1 || ty === y || ty === y + height - 1) {
-          // Door position
+          // Door position - create Door entity for houses only
           if (tx === doorX && ty === doorY) {
-            const door = this.scene.add.image(px, py, 'door');
-            door.setDepth(DEPTH.WALLS);
-            if (this.scene.hud) this.scene.hud.ignoreGameObject(door);
+            if (type === 'house') {
+              const door = new Door(this.scene, px, py, building.id);
+              if (this.scene.doors) {
+                this.scene.doors.push(door);
+              }
+            } else {
+              // Police station and store get regular door images (always open)
+              const doorImg = this.scene.add.image(px, py, 'door_open');
+              doorImg.setDepth(DEPTH.WALLS);
+              if (this.scene.hud) this.scene.hud.ignoreGameObject(doorImg);
+            }
           } else {
             const wall = this.scene.physics.add.staticImage(px, py, wallTexture);
             wall.setDepth(DEPTH.WALLS);

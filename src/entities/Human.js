@@ -1,6 +1,17 @@
 import Phaser from 'phaser';
-import { HUMAN, IDENTIFICATION } from '../config/constants.js';
+import { HUMAN, IDENTIFICATION, DEPTH, TRUST, MAP } from '../config/constants.js';
 import { LineOfSight } from '../utils/LineOfSight.js';
+import { Pathfinding } from '../utils/Pathfinding.js';
+
+/**
+ * Human behavior states
+ */
+const HumanState = {
+  WANDERING: 'wandering',
+  FLEEING: 'fleeing',
+  FOLLOWING: 'following',
+  CONFUSED: 'confused'  // After stopping follow
+};
 
 /**
  * Human NPC entity with wandering behavior and corpse/crime detection
@@ -9,10 +20,15 @@ export class Human {
   constructor(scene, x, y, hairColor, skinColor, homeBuilding = null) {
     this.scene = scene;
     this.speed = HUMAN.SPEED;
+    this.fleeSpeed = HUMAN.SPEED * 1.5; // Run faster when fleeing
     this.hairColor = hairColor;
     this.skinColor = skinColor;
     this.isAlive = true;
     this.hasSeenCorpse = false;
+    this.hasAlertedPolice = false;
+
+    // Behavior state
+    this.state = HumanState.WANDERING;
 
     // Home building for wandering
     this.homeBuilding = homeBuilding;
@@ -27,6 +43,21 @@ export class Human {
       this.wanderRadius = HUMAN.WANDER_RADIUS;
     }
 
+    // Pathfinding
+    this.currentPath = [];
+    this.pathIndex = 0;
+    this.stuckTimer = 0;
+    this.stuckCount = 0;
+    this.lastPosition = { x, y };
+
+    // Trust system
+    this.trust = 0;
+    this.trustMeter = null;
+    this.followStartX = 0;
+    this.followStartY = 0;
+    this.tilesFollowed = 0;
+    this.followIcon = null;
+
     this.createSprite(x, y);
     this.initializeWandering();
   }
@@ -38,31 +69,486 @@ export class Human {
     this.sprite.body.setSize(12, 12);
     this.sprite.body.setOffset(2, 4);
     this.sprite.parentEntity = this;
+    this.sprite.setDepth(DEPTH.NPC);
+
+    this.registerActions();
+  }
+
+  registerActions() {
+    if (!this.scene.actionSystem) return;
+
+    this.scene.actionSystem.registerObject(this.sprite, {
+      owner: this,
+      getActions: () => this.getAvailableActions()
+    });
+  }
+
+  getAvailableActions() {
+    if (!this.isAlive) return [];
+
+    const actions = [
+      {
+        name: 'Attack',
+        key: 'SPACE',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
+        callback: () => this.scene.player?.tryKill()
+      }
+    ];
+
+    // Add Talk action if not already following
+    if (this.state !== HumanState.FOLLOWING) {
+      actions.push({
+        name: 'Talk',
+        key: 'T',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.T,
+        callback: () => this.talk()
+      });
+    }
+
+    // Add Follow Me action if trust is maxed and not already following
+    if (this.trust >= TRUST.MAX_TRUST && this.state !== HumanState.FOLLOWING) {
+      actions.push({
+        name: 'Follow Me',
+        key: 'F',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.F,
+        callback: () => this.startFollowing()
+      });
+    }
+
+    return actions;
+  }
+
+  talk() {
+    // Check talk cooldown
+    if (!this.scene.canTalk || !this.scene.canTalk()) return;
+
+    // Trigger talk cooldown
+    this.scene.triggerTalkCooldown?.();
+
+    // Gain trust (max 3)
+    if (this.trust < TRUST.MAX_TRUST) {
+      this.trust++;
+      this.updateTrustMeter();
+    }
+
+    // Visual feedback - flash the human briefly
+    this.sprite.setTint(0x88ff88);
+    this.scene.time.delayedCall(200, () => {
+      if (this.sprite?.active && this.isAlive) {
+        this.sprite.clearTint();
+      }
+    });
+  }
+
+  // ==================== Trust Meter UI ====================
+
+  updateTrustMeter() {
+    if (this.trust <= 0) {
+      // Hide trust meter if trust is 0
+      if (this.trustMeter) {
+        this.trustMeter.destroy();
+        this.trustMeter = null;
+      }
+      return;
+    }
+
+    // Create trust meter if it doesn't exist
+    if (!this.trustMeter) {
+      this.trustMeter = this.scene.add.graphics();
+      this.trustMeter.setDepth(DEPTH.HEALTH_BAR);
+      if (this.scene.hud) {
+        this.scene.hud.ignoreGameObject(this.trustMeter);
+      }
+    }
+
+    this.drawTrustMeter();
+  }
+
+  drawTrustMeter() {
+    if (!this.trustMeter) return;
+
+    this.trustMeter.clear();
+
+    const x = this.sprite.x - 10;
+    const y = this.sprite.y - 14; // Below where health bar would be
+
+    const width = 20;
+    const height = 3;
+    const fillWidth = (this.trust / TRUST.MAX_TRUST) * width;
+
+    // Background
+    this.trustMeter.fillStyle(0x333333, 0.8);
+    this.trustMeter.fillRect(x, y, width, height);
+
+    // Fill - blue normally, purple when full
+    const fillColor = this.trust >= TRUST.MAX_TRUST ? 0x9932cc : 0x3498db;
+    this.trustMeter.fillStyle(fillColor, 1);
+    this.trustMeter.fillRect(x, y, fillWidth, height);
+
+    // Border
+    this.trustMeter.lineStyle(1, 0x000000, 0.8);
+    this.trustMeter.strokeRect(x, y, width, height);
+  }
+
+  updateTrustMeterPosition() {
+    if (this.trustMeter && this.trust > 0) {
+      this.drawTrustMeter();
+    }
+  }
+
+  // ==================== Following Behavior ====================
+
+  startFollowing() {
+    if (this.state === HumanState.FOLLOWING) return;
+
+    this.state = HumanState.FOLLOWING;
+    this.followStartX = this.sprite.x;
+    this.followStartY = this.sprite.y;
+    this.tilesFollowed = 0;
+    this.isWaiting = false;
+    this.currentPath = [];
+    this.pathIndex = 0;
+
+    // Show follow icon
+    this.showFollowIcon();
+  }
+
+  showFollowIcon() {
+    if (this.followIcon) return;
+
+    this.followIcon = this.scene.add.text(
+      this.sprite.x,
+      this.sprite.y - 18,
+      '♥',
+      {
+        fontSize: '10px',
+        fontFamily: 'monospace',
+        color: '#ff69b4',  // Hot pink
+        stroke: '#000000',
+        strokeThickness: 2
+      }
+    );
+    this.followIcon.setOrigin(0.5, 0.5);
+    this.followIcon.setDepth(DEPTH.EXCLAMATION);
+
+    if (this.scene.hud) {
+      this.scene.hud.ignoreGameObject(this.followIcon);
+    }
+
+    // Gentle pulse animation
+    this.scene.tweens.add({
+      targets: this.followIcon,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+  }
+
+  hideFollowIcon() {
+    if (this.followIcon) {
+      this.followIcon.destroy();
+      this.followIcon = null;
+    }
+  }
+
+  updateFollowIconPosition() {
+    if (this.followIcon && this.sprite?.active) {
+      this.followIcon.setPosition(this.sprite.x, this.sprite.y - 18);
+    }
+  }
+
+  updateFollowing() {
+    const player = this.scene.player;
+    if (!player?.sprite) {
+      this.stopFollowing();
+      return;
+    }
+
+    // Update follow icon position
+    this.updateFollowIconPosition();
+
+    // Calculate distance followed in tiles
+    const dx = this.sprite.x - this.followStartX;
+    const dy = this.sprite.y - this.followStartY;
+    const distanceFollowed = Math.sqrt(dx * dx + dy * dy);
+    this.tilesFollowed = distanceFollowed / MAP.TILE_SIZE;
+
+    // Check if should stop following based on distance
+    if (this.shouldStopFollowing()) {
+      this.stopFollowing();
+      return;
+    }
+
+    // Move towards player
+    const playerDx = player.sprite.x - this.sprite.x;
+    const playerDy = player.sprite.y - this.sprite.y;
+    const distToPlayer = Math.sqrt(playerDx * playerDx + playerDy * playerDy);
+
+    if (distToPlayer > TRUST.FOLLOW_DISTANCE) {
+      // Move towards player
+      const vx = (playerDx / distToPlayer) * this.speed;
+      const vy = (playerDy / distToPlayer) * this.speed;
+      this.sprite.setVelocity(vx, vy);
+    } else {
+      // Close enough, stop moving
+      this.sprite.setVelocity(0, 0);
+    }
+  }
+
+  shouldStopFollowing() {
+    // 100% stop at 20 tiles
+    if (this.tilesFollowed >= TRUST.FOLLOW_MAX_TILES) return true;
+
+    // Check random stop chances at thresholds
+    if (this.tilesFollowed >= 15 && !this.checked15) {
+      this.checked15 = true;
+      if (Math.random() < TRUST.STOP_CHANCE_15_TILES) return true;
+    }
+    if (this.tilesFollowed >= 10 && !this.checked10) {
+      this.checked10 = true;
+      if (Math.random() < TRUST.STOP_CHANCE_10_TILES) return true;
+    }
+    if (this.tilesFollowed >= 5 && !this.checked5) {
+      this.checked5 = true;
+      if (Math.random() < TRUST.STOP_CHANCE_5_TILES) return true;
+    }
+
+    return false;
+  }
+
+  stopFollowing() {
+    this.state = HumanState.CONFUSED;
+    this.sprite.setVelocity(0, 0);
+
+    // Hide follow icon
+    this.hideFollowIcon();
+
+    // Lose 1 trust
+    this.trust = Math.max(0, this.trust - 1);
+    this.updateTrustMeter();
+
+    // Reset follow tracking
+    this.checked5 = false;
+    this.checked10 = false;
+    this.checked15 = false;
+
+    // Show question mark
+    this.showQuestionMark();
+
+    // Shiver effect
+    this.doShiverEffect();
+
+    // After pause, return home
+    this.scene.time.delayedCall(TRUST.STOP_PAUSE_DURATION, () => {
+      if (this.isAlive && this.state === HumanState.CONFUSED) {
+        this.state = HumanState.WANDERING;
+        this.returnHome();
+      }
+    });
+  }
+
+  showQuestionMark() {
+    const questionMark = this.scene.add.text(
+      this.sprite.x,
+      this.sprite.y - 20,
+      '?',
+      {
+        fontSize: '16px',
+        fontFamily: 'monospace',
+        color: '#ffff00',
+        stroke: '#000000',
+        strokeThickness: 3
+      }
+    );
+    questionMark.setOrigin(0.5, 0.5);
+    questionMark.setDepth(DEPTH.EXCLAMATION);
+
+    if (this.scene.hud) {
+      this.scene.hud.ignoreGameObject(questionMark);
+    }
+
+    // Bob animation
+    this.scene.tweens.add({
+      targets: questionMark,
+      y: questionMark.y - 8,
+      duration: 200,
+      yoyo: true,
+      repeat: 3,
+      ease: 'Sine.easeInOut'
+    });
+
+    // Fade out after pause duration
+    this.scene.time.delayedCall(TRUST.STOP_PAUSE_DURATION - 300, () => {
+      this.scene.tweens.add({
+        targets: questionMark,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => questionMark.destroy()
+      });
+    });
+  }
+
+  doShiverEffect() {
+    // Quick left-right shake
+    const originalX = this.sprite.x;
+    this.scene.tweens.add({
+      targets: this.sprite,
+      x: originalX + 2,
+      duration: 50,
+      yoyo: true,
+      repeat: 5,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        if (this.sprite?.active) {
+          this.sprite.x = originalX;
+        }
+      }
+    });
+  }
+
+  returnHome() {
+    // Set target back to home
+    this.targetX = this.spawnX;
+    this.targetY = this.spawnY;
+    this.recalculatePath();
+  }
+
+  /**
+   * Respond to a door knock - walk to door and open it
+   */
+  respondToKnock(door) {
+    if (!this.isAlive || this.state === HumanState.FLEEING) return;
+
+    // Save the door reference
+    this.targetDoor = door;
+
+    // Set target to door position
+    this.targetX = door.x;
+    this.targetY = door.y;
+    this.isWaiting = false;
+    this.recalculatePath();
+
+    // Set a callback to open door when we get there
+    this.respondingToKnock = true;
   }
 
   initializeWandering() {
     this.targetX = this.spawnX;
     this.targetY = this.spawnY;
-    this.waitTimer = 0;
+    this.waitTimer = Phaser.Math.Between(100, 500); // Stagger initial movement
     this.isWaiting = true;
-    this.pickNewTarget();
   }
 
   // ==================== Wandering Behavior ====================
 
   pickNewTarget() {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * this.wanderRadius;
+    const townData = this.scene.townData;
+    if (!townData?.grid) {
+      // Fallback - simple random walk inside home area
+      this.targetX = this.spawnX + Phaser.Math.Between(-16, 16);
+      this.targetY = this.spawnY + Phaser.Math.Between(-16, 16);
+      this.isWaiting = false;
+      return;
+    }
 
-    this.targetX = this.spawnX + Math.cos(angle) * distance;
-    this.targetY = this.spawnY + Math.sin(angle) * distance;
+    const tileSize = townData.tileSize;
 
-    // Clamp to world bounds
-    const bounds = this.scene.physics.world.bounds;
-    this.targetX = Phaser.Math.Clamp(this.targetX, bounds.x + 32, bounds.right - 32);
-    this.targetY = Phaser.Math.Clamp(this.targetY, bounds.y + 32, bounds.bottom - 32);
+    // Decide where to go based on probability:
+    // 85% stay inside home
+    // 10% go outside near home (yard/street)
+    // 5% go to store
+    const roll = Math.random();
 
+    if (roll < 0.85) {
+      // Stay inside home - find floor tiles in home building
+      this.pickTargetInsideHome(townData, tileSize);
+    } else if (roll < 0.95) {
+      // Go outside near home
+      this.pickTargetNearHome(townData, tileSize);
+    } else {
+      // Go to store
+      this.pickTargetAtStore(townData, tileSize);
+    }
+  }
+
+  pickTargetInsideHome(townData, tileSize) {
+    if (!this.homeBuilding) {
+      this.pickTargetNearHome(townData, tileSize);
+      return;
+    }
+
+    const { x, y, width, height } = this.homeBuilding;
+
+    // Try to find a floor tile inside the home
+    for (let attempts = 0; attempts < 15; attempts++) {
+      // Pick random tile inside building (not on walls)
+      const tileX = x + 1 + Phaser.Math.Between(0, width - 3);
+      const tileY = y + 1 + Phaser.Math.Between(0, height - 3);
+
+      const cell = townData.grid[tileX]?.[tileY];
+      if (cell && (cell.type === 'floor' || cell.type === 'door')) {
+        this.targetX = tileX * tileSize + tileSize / 2;
+        this.targetY = tileY * tileSize + tileSize / 2;
+        this.isWaiting = false;
+        this.recalculatePath();
+        return;
+      }
+    }
+
+    // Fallback - stay at spawn
+    this.targetX = this.spawnX;
+    this.targetY = this.spawnY;
     this.isWaiting = false;
+  }
+
+  pickTargetNearHome(townData, tileSize) {
+    const centerTileX = Math.floor(this.spawnX / tileSize);
+    const centerTileY = Math.floor(this.spawnY / tileSize);
+
+    // Look for road/plaza tiles near home (within 3-6 tiles)
+    for (let attempts = 0; attempts < 20; attempts++) {
+      const offsetX = Phaser.Math.Between(-6, 6);
+      const offsetY = Phaser.Math.Between(-6, 6);
+      const tileX = centerTileX + offsetX;
+      const tileY = centerTileY + offsetY;
+
+      if (tileX < 2 || tileY < 2 || tileX >= townData.mapWidth - 2 || tileY >= townData.mapHeight - 2) {
+        continue;
+      }
+
+      const cell = townData.grid[tileX]?.[tileY];
+      if (cell && (cell.type === 'road' || cell.type === 'plaza')) {
+        this.targetX = tileX * tileSize + tileSize / 2;
+        this.targetY = tileY * tileSize + tileSize / 2;
+        this.isWaiting = false;
+        this.recalculatePath();
+        return;
+      }
+    }
+
+    // Fallback - stay inside
+    this.pickTargetInsideHome(townData, tileSize);
+  }
+
+  pickTargetAtStore(townData, tileSize) {
+    const store = townData.store || this.scene.townData?.store;
+    if (!store) {
+      this.pickTargetNearHome(townData, tileSize);
+      return;
+    }
+
+    // Go to store entrance area
+    const storeDoorX = store.doorPixelX || (store.doorX * tileSize + tileSize / 2);
+    const storeDoorY = store.doorPixelY || ((store.doorY + 1) * tileSize + tileSize / 2);
+
+    // Pick a spot near the store door
+    this.targetX = storeDoorX + Phaser.Math.Between(-16, 16);
+    this.targetY = storeDoorY + Phaser.Math.Between(0, 32);
+    this.isWaiting = false;
+    this.recalculatePath();
   }
 
   // ==================== Update Loop ====================
@@ -70,35 +556,258 @@ export class Human {
   update(delta) {
     if (!this.isAlive || !this.sprite.active) return;
 
+    // Update trust meter position
+    this.updateTrustMeterPosition();
+
+    // Handle following state separately
+    if (this.state === HumanState.FOLLOWING) {
+      this.updateFollowing();
+      return;
+    }
+
+    // Don't do normal AI when confused (paused)
+    if (this.state === HumanState.CONFUSED) {
+      this.sprite.setVelocity(0, 0);
+      return;
+    }
+
     this.checkForCorpses();
     this.checkForIllegalActivity();
+    this.checkForIdentifiedPlayer();
+    this.checkForBrokenDoors();
+    this.handleStuckDetection(delta);
     this.updateMovement(delta);
   }
+
+  checkForBrokenDoors() {
+    if (!this.scene.doors) return;
+
+    for (const door of this.scene.doors) {
+      if (door.state !== 'broken' || door.hasBeenReported) continue;
+
+      const distance = LineOfSight.distance(
+        this.sprite.x, this.sprite.y,
+        door.x, door.y
+      );
+
+      if (distance < HUMAN.CORPSE_DETECT_RANGE) {
+        if (LineOfSight.hasLineOfSight(
+          this.sprite.x, this.sprite.y,
+          door.x, door.y,
+          this.scene.walls
+        )) {
+          door.markAsReported();
+          this.scene.alertCopsToDisturbance(door.x, door.y);
+          break;
+        }
+      }
+    }
+  }
+
+  // ==================== Fleeing Behavior ====================
+
+  checkForIdentifiedPlayer() {
+    // Only flee if player has been identified as a threat
+    if (!this.scene.playerIdentified) {
+      // If we were fleeing but player is no longer identified, go back to wandering
+      if (this.state === HumanState.FLEEING) {
+        this.state = HumanState.WANDERING;
+        this.pickNewTarget();
+      }
+      return;
+    }
+
+    const player = this.scene.player;
+    if (!player?.sprite) return;
+
+    const distance = LineOfSight.distance(
+      this.sprite.x, this.sprite.y,
+      player.sprite.x, player.sprite.y
+    );
+
+    const fleeRange = 5 * 16; // 5 tiles
+
+    if (distance < fleeRange) {
+      // Check line of sight
+      if (LineOfSight.hasLineOfSight(
+        this.sprite.x, this.sprite.y,
+        player.sprite.x, player.sprite.y,
+        this.scene.walls
+      )) {
+        this.startFleeing(player.sprite.x, player.sprite.y);
+      }
+    } else if (this.state === HumanState.FLEEING) {
+      // Far enough away - stop fleeing, go back to wandering
+      this.state = HumanState.WANDERING;
+      this.hasAlertedPolice = false; // Reset so they can alert again if they see player again
+      this.pickNewTarget();
+    }
+  }
+
+  startFleeing(playerX, playerY) {
+    if (this.state !== HumanState.FLEEING) {
+      this.state = HumanState.FLEEING;
+
+      // Alert police to player's location if we haven't already
+      if (!this.hasAlertedPolice) {
+        this.hasAlertedPolice = true;
+        this.scene.alertCopsToPlayerLocation(playerX, playerY);
+      }
+    }
+
+    // Calculate flee direction (away from player)
+    const dx = this.sprite.x - playerX;
+    const dy = this.sprite.y - playerY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > 0) {
+      // Find a point far away from player
+      const fleeDistance = 8 * 16; // Flee 8 tiles away
+      const normalizedDx = dx / dist;
+      const normalizedDy = dy / dist;
+
+      this.targetX = this.sprite.x + normalizedDx * fleeDistance;
+      this.targetY = this.sprite.y + normalizedDy * fleeDistance;
+
+      // Clamp to world bounds
+      const bounds = this.scene.physics.world.bounds;
+      this.targetX = Phaser.Math.Clamp(this.targetX, bounds.x + 32, bounds.right - 32);
+      this.targetY = Phaser.Math.Clamp(this.targetY, bounds.y + 32, bounds.bottom - 32);
+
+      this.isWaiting = false;
+      this.recalculatePath();
+    }
+  }
+
+  // ==================== Pathfinding ====================
+
+  recalculatePath() {
+    const townData = this.scene.townData;
+    if (!townData) return;
+
+    const path = Pathfinding.findPath(
+      this.sprite.x, this.sprite.y,
+      this.targetX, this.targetY,
+      townData,
+      true // preferRoads
+    );
+
+    if (path.length > 1) {
+      this.currentPath = Pathfinding.simplifyPath(path, this.scene.walls);
+      this.pathIndex = 1; // Skip starting position
+    } else {
+      this.currentPath = [];
+      this.pathIndex = 0;
+    }
+  }
+
+  getNextWaypoint() {
+    if (this.currentPath.length > 0 && this.pathIndex < this.currentPath.length) {
+      return this.currentPath[this.pathIndex];
+    }
+    return null;
+  }
+
+  advanceWaypoint() {
+    this.pathIndex++;
+    if (this.pathIndex >= this.currentPath.length) {
+      this.currentPath = [];
+      this.pathIndex = 0;
+    }
+  }
+
+  handleStuckDetection(delta) {
+    const dx = this.sprite.x - this.lastPosition.x;
+    const dy = this.sprite.y - this.lastPosition.y;
+    const moved = Math.sqrt(dx * dx + dy * dy);
+
+    if (moved < 1 && !this.isWaiting) {
+      this.stuckTimer += delta;
+      if (this.stuckTimer > 1000) { // Stuck for 1 second
+        this.stuckCount++;
+
+        if (this.stuckCount >= 3) {
+          // Give up on current path, pick new target
+          this.stuckCount = 0;
+          if (this.state === HumanState.WANDERING) {
+            this.pickNewTarget();
+          } else {
+            // If fleeing and stuck, just wait briefly
+            this.isWaiting = true;
+            this.waitTimer = 500;
+          }
+        } else {
+          this.recalculatePath();
+        }
+        this.stuckTimer = 0;
+      }
+    } else {
+      this.stuckTimer = 0;
+      this.stuckCount = 0;
+    }
+
+    this.lastPosition = { x: this.sprite.x, y: this.sprite.y };
+  }
+
+  // ==================== Movement ====================
 
   updateMovement(delta) {
     if (this.isWaiting) {
       this.waitTimer -= delta;
       if (this.waitTimer <= 0) {
-        this.pickNewTarget();
+        this.isWaiting = false;
+        if (this.state === HumanState.WANDERING) {
+          this.pickNewTarget();
+        }
       }
       this.sprite.setVelocity(0, 0);
       return;
     }
 
-    const dx = this.targetX - this.sprite.x;
-    const dy = this.targetY - this.sprite.y;
+    // Determine current movement target
+    let currentTargetX, currentTargetY;
+    const waypoint = this.getNextWaypoint();
+
+    if (waypoint) {
+      currentTargetX = waypoint.x;
+      currentTargetY = waypoint.y;
+    } else {
+      currentTargetX = this.targetX;
+      currentTargetY = this.targetY;
+    }
+
+    const dx = currentTargetX - this.sprite.x;
+    const dy = currentTargetY - this.sprite.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance < 8) {
-      this.isWaiting = true;
-      this.waitTimer = Phaser.Math.Between(
-        HUMAN.WAIT_TIME_MIN,
-        HUMAN.WAIT_TIME_MAX
-      );
+    // Check if reached current waypoint
+    if (waypoint && distance < 12) {
+      this.advanceWaypoint();
+      return;
+    }
+
+    // Use flee speed when fleeing, normal speed otherwise
+    const currentSpeed = this.state === HumanState.FLEEING ? this.fleeSpeed : this.speed;
+
+    // Check if reached final target
+    if (!waypoint && distance < 8) {
+      // Check if responding to knock - open the door
+      if (this.respondingToKnock && this.targetDoor) {
+        this.targetDoor.open();
+        this.targetDoor = null;
+        this.respondingToKnock = false;
+      }
+
+      if (this.state === HumanState.WANDERING) {
+        this.isWaiting = true;
+        this.waitTimer = Phaser.Math.Between(HUMAN.WAIT_TIME_MIN, HUMAN.WAIT_TIME_MAX);
+      }
       this.sprite.setVelocity(0, 0);
+      this.currentPath = [];
+      this.pathIndex = 0;
     } else {
-      const vx = (dx / distance) * this.speed;
-      const vy = (dy / distance) * this.speed;
+      const vx = (dx / distance) * currentSpeed;
+      const vy = (dy / distance) * currentSpeed;
       this.sprite.setVelocity(vx, vy);
     }
   }
@@ -163,6 +872,20 @@ export class Human {
     if (!this.isAlive) return;
     this.isAlive = false;
 
+    // Unregister from action system
+    if (this.scene.actionSystem) {
+      this.scene.actionSystem.unregisterObject(this.sprite);
+    }
+
+    // Clean up trust meter
+    if (this.trustMeter) {
+      this.trustMeter.destroy();
+      this.trustMeter = null;
+    }
+
+    // Clean up follow icon
+    this.hideFollowIcon();
+
     this.sprite.setTint(0xffff00);
 
     const deathX = this.sprite.x;
@@ -181,6 +904,11 @@ export class Human {
   }
 
   destroy() {
+    if (this.trustMeter) {
+      this.trustMeter.destroy();
+      this.trustMeter = null;
+    }
+    this.hideFollowIcon();
     if (this.sprite) {
       this.sprite.destroy();
     }

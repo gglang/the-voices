@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import { DEPTH, EFFECTS } from '../config/constants.js';
 
 /**
@@ -38,8 +39,35 @@ export class CorpseManager {
       isPickedUp: false
     };
 
+    // Register corpse with action system
+    this.registerCorpseActions(corpseData);
+
     this.corpses.push(corpseData);
     return corpseData;
+  }
+
+  /**
+   * Register corpse with action system for pickup action
+   */
+  registerCorpseActions(corpseData) {
+    if (!this.scene.actionSystem) return;
+
+    this.scene.actionSystem.registerObject(corpseData.sprite, {
+      owner: corpseData,
+      getActions: () => {
+        if (corpseData.isPickedUp) return [];
+        // Only show pickup if player isn't carrying a corpse
+        if (this.scene.player?.carriedCorpse) return [];
+        return [
+          {
+            name: 'Pickup',
+            key: 'SPACE',
+            keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
+            callback: () => this.scene.player?.pickupCorpse()
+          }
+        ];
+      }
+    });
   }
 
   /**
@@ -110,6 +138,11 @@ export class CorpseManager {
    * Destroy a corpse with fade effect
    */
   destroy(corpse, duration = 500) {
+    // Unregister from action system
+    if (this.scene.actionSystem) {
+      this.scene.actionSystem.unregisterObject(corpse.sprite);
+    }
+
     this.scene.tweens.add({
       targets: corpse.sprite,
       alpha: 0,

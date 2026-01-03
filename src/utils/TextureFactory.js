@@ -407,10 +407,11 @@ export class TextureFactory {
   }
 
   /**
-   * Door texture
+   * Door textures (closed, open, broken)
    */
   createDoor() {
-    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Closed door
+    let g = this.scene.make.graphics({ x: 0, y: 0, add: false });
     // Door frame
     g.fillStyle(0x4a3728);
     g.fillRect(0, 0, 16, 16);
@@ -421,6 +422,37 @@ export class TextureFactory {
     g.fillStyle(0xffd700);
     g.fillCircle(11, 8, 2);
     g.generateTexture('door', 16, 16);
+
+    // Open door (shows doorway/floor)
+    g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Frame
+    g.fillStyle(0x4a3728);
+    g.fillRect(0, 0, 16, 16);
+    // Doorway (dark interior)
+    g.fillStyle(0x2a1a10);
+    g.fillRect(2, 0, 12, 14);
+    // Hint of floor inside
+    g.fillStyle(0xA0522D);
+    g.fillRect(3, 12, 10, 2);
+    g.generateTexture('door_open', 16, 16);
+
+    // Broken door
+    g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Frame (damaged)
+    g.fillStyle(0x3a2718);
+    g.fillRect(0, 0, 16, 16);
+    // Broken door pieces
+    g.fillStyle(0x4c3023);
+    g.fillRect(2, 0, 5, 10); // Left piece tilted
+    g.fillRect(9, 2, 5, 8);  // Right piece
+    // Splinters
+    g.fillStyle(0x5c4033);
+    g.fillRect(7, 0, 2, 4);
+    g.fillRect(6, 10, 3, 2);
+    // Dark interior visible
+    g.fillStyle(0x2a1a10);
+    g.fillRect(4, 11, 8, 3);
+    g.generateTexture('door_broken', 16, 16);
   }
 
   /**

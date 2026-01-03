@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { POLICE, DEPTH } from '../config/constants.js';
 import { LineOfSight } from '../utils/LineOfSight.js';
+import { Pathfinding } from '../utils/Pathfinding.js';
 
 /**
  * Cop behavior states
@@ -48,8 +49,16 @@ export class Police {
     this.stuckTimer = 0;
     this.lastPosition = { x, y };
 
+    // Pathfinding
+    this.currentPath = [];
+    this.pathIndex = 0;
+    this.pathRecalcTimer = 0;
+
     this.createSprite(x, y);
-    this.pickNewWanderTarget();
+
+    // Start with a brief wait to let physics settle, then start wandering
+    this.isWaiting = true;
+    this.waitTimer = Phaser.Math.Between(100, 500);
   }
 
   createSprite(x, y) {
@@ -58,7 +67,48 @@ export class Police {
     this.sprite.body.setSize(12, 12);
     this.sprite.body.setOffset(2, 4);
     this.sprite.parentEntity = this;
+    this.sprite.setDepth(DEPTH.NPC);
     this.healthBar = null;
+
+    this.registerActions();
+  }
+
+  registerActions() {
+    if (!this.scene.actionSystem) return;
+
+    this.scene.actionSystem.registerObject(this.sprite, {
+      owner: this,
+      getActions: () => this.getAvailableActions()
+    });
+  }
+
+  getAvailableActions() {
+    if (!this.isAlive) return [];
+
+    return [
+      {
+        name: 'Attack',
+        key: 'SPACE',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
+        callback: () => this.scene.player?.tryKill()
+      },
+      {
+        name: 'Talk',
+        key: 'T',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.T,
+        callback: () => this.talk()
+      }
+    ];
+  }
+
+  talk() {
+    // Simple talk feedback - flash the cop briefly
+    this.sprite.setTint(0x88ff88);
+    this.scene.time.delayedCall(200, () => {
+      if (this.sprite?.active && this.isAlive) {
+        this.sprite.clearTint();
+      }
+    });
   }
 
   // ==================== Update Loop ====================
@@ -73,6 +123,7 @@ export class Police {
 
     if (this.state === CopState.WANDERING) {
       this.checkForBodies();
+      this.checkForBrokenDoors();
     }
 
     this.handleStuckDetection(delta);
@@ -82,25 +133,42 @@ export class Police {
   // ==================== Wandering ====================
 
   pickNewWanderTarget() {
-    const bounds = this.scene.physics.world.bounds;
-    const maxAttempts = 20;
+    const townData = this.scene.townData;
+    if (!townData?.grid) {
+      // Fallback if no town data
+      this.targetX = this.sprite.x;
+      this.targetY = this.sprite.y;
+      return;
+    }
 
+    const tileSize = townData.tileSize;
+    const maxAttempts = 30;
+
+    // Prefer road tiles for wandering - cops should patrol roads
     for (let attempts = 0; attempts < maxAttempts; attempts++) {
-      const x = Phaser.Math.Between(bounds.x + 48, bounds.right - 48);
-      const y = Phaser.Math.Between(bounds.y + 48, bounds.bottom - 48);
+      const tileX = Phaser.Math.Between(3, townData.mapWidth - 4);
+      const tileY = Phaser.Math.Between(3, townData.mapHeight - 4);
 
-      if (!LineOfSight.isPointInWall(x, y, this.scene.walls)) {
-        this.targetX = x;
-        this.targetY = y;
+      const cell = townData.grid[tileX]?.[tileY];
+      if (!cell) continue;
+
+      // Prefer roads and plazas, but allow other walkable areas
+      const isPreferred = cell.type === 'road' || cell.type === 'plaza';
+      const isWalkable = cell.type !== 'wall' && cell.type !== 'tree' && cell.type !== 'fountain';
+
+      // 80% chance to require road/plaza, 20% chance to accept any walkable
+      if (isWalkable && (isPreferred || attempts > maxAttempts * 0.8)) {
+        this.targetX = tileX * tileSize + tileSize / 2;
+        this.targetY = tileY * tileSize + tileSize / 2;
         this.isWaiting = false;
+        this.recalculatePath();
         return;
       }
     }
 
-    // Fallback
-    this.targetX = Phaser.Math.Between(bounds.x + 48, bounds.right - 48);
-    this.targetY = Phaser.Math.Between(bounds.y + 48, bounds.bottom - 48);
-    this.isWaiting = false;
+    // Ultimate fallback - stay in place briefly
+    this.isWaiting = true;
+    this.waitTimer = 1000;
   }
 
   // ==================== Player Detection ====================
@@ -195,7 +263,33 @@ export class Police {
     }
   }
 
-  // ==================== Body Detection ====================
+  // ==================== Body/Door Detection ====================
+
+  checkForBrokenDoors() {
+    if (!this.scene.doors) return;
+
+    for (const door of this.scene.doors) {
+      if (door.state !== 'broken' || door.hasBeenReported) continue;
+
+      const distance = LineOfSight.distance(
+        this.sprite.x, this.sprite.y,
+        door.x, door.y
+      );
+
+      if (distance < POLICE.BODY_SIGHT_RANGE) {
+        if (LineOfSight.hasLineOfSight(
+          this.sprite.x, this.sprite.y,
+          door.x, door.y,
+          this.scene.walls
+        )) {
+          door.markAsReported();
+          // Investigate the broken door
+          this.assignInvestigation(door.x, door.y);
+          break;
+        }
+      }
+    }
+  }
 
   checkForBodies() {
     for (const corpse of this.scene.corpses) {
@@ -231,7 +325,22 @@ export class Police {
       this.targetX = x;
       this.targetY = y;
       this.isWaiting = false;
+      // Calculate path to investigation target
+      this.recalculatePath();
     }
+  }
+
+  assignChase(playerX, playerY) {
+    // Force cop to chase player at given location
+    // This is called when civilians report player location
+    this.state = CopState.CHASING;
+    this.lastSeenPlayerX = playerX;
+    this.lastSeenPlayerY = playerY;
+    this.targetX = playerX;
+    this.targetY = playerY;
+    this.isWaiting = false;
+    this.investigationTarget = null;
+    this.recalculatePath();
   }
 
   /**
@@ -294,45 +403,100 @@ export class Police {
     if (moved < 1 && !this.isWaiting) {
       this.stuckTimer += delta;
       if (this.stuckTimer > POLICE.STUCK_THRESHOLD) {
-        this.findAlternativePath();
+        this.stuckCount = (this.stuckCount || 0) + 1;
+
+        if (this.stuckCount >= 3) {
+          // Been stuck too many times - find nearest road and go there
+          this.findNearestRoadTarget();
+          this.stuckCount = 0;
+        } else {
+          // Try recalculating path
+          this.recalculatePath();
+        }
         this.stuckTimer = 0;
       }
     } else {
       this.stuckTimer = 0;
+      this.stuckCount = 0;
     }
 
     this.lastPosition = { x: this.sprite.x, y: this.sprite.y };
   }
 
-  findAlternativePath() {
-    const dx = this.targetX - this.sprite.x;
-    const dy = this.targetY - this.sprite.y;
+  findNearestRoadTarget() {
+    const townData = this.scene.townData;
+    if (!townData?.grid) return;
 
-    // Try perpendicular directions
-    const perpendiculars = [
-      { x: this.sprite.x + dy * 0.5, y: this.sprite.y - dx * 0.5 },
-      { x: this.sprite.x - dy * 0.5, y: this.sprite.y + dx * 0.5 }
-    ];
+    const tileSize = townData.tileSize;
+    const currentTileX = Math.floor(this.sprite.x / tileSize);
+    const currentTileY = Math.floor(this.sprite.y / tileSize);
 
-    for (const point of perpendiculars) {
-      if (!LineOfSight.isPointInWall(point.x, point.y, this.scene.walls)) {
-        this.intermediateTargetX = point.x;
-        this.intermediateTargetY = point.y;
-        return;
+    // Search in expanding circles for a road tile
+    for (let radius = 1; radius < 15; radius++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+
+          const tileX = currentTileX + dx;
+          const tileY = currentTileY + dy;
+
+          if (tileX < 0 || tileY < 0 || tileX >= townData.mapWidth || tileY >= townData.mapHeight) continue;
+
+          const cell = townData.grid[tileX]?.[tileY];
+          if (cell && (cell.type === 'road' || cell.type === 'plaza')) {
+            this.targetX = tileX * tileSize + tileSize / 2;
+            this.targetY = tileY * tileSize + tileSize / 2;
+            this.currentPath = [];
+            this.pathIndex = 0;
+            this.recalculatePath();
+            return;
+          }
+        }
       }
     }
+  }
 
-    // Try radial directions
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const checkX = this.sprite.x + Math.cos(angle) * 48;
-      const checkY = this.sprite.y + Math.sin(angle) * 48;
+  /**
+   * Calculate a path to the current target using A*
+   */
+  recalculatePath() {
+    const townData = this.scene.townData;
+    if (!townData) return;
 
-      if (!LineOfSight.isPointInWall(checkX, checkY, this.scene.walls)) {
-        this.intermediateTargetX = checkX;
-        this.intermediateTargetY = checkY;
-        return;
-      }
+    const path = Pathfinding.findPath(
+      this.sprite.x, this.sprite.y,
+      this.targetX, this.targetY,
+      townData
+    );
+
+    if (path.length > 1) {
+      // Simplify path to reduce waypoints
+      this.currentPath = Pathfinding.simplifyPath(path, this.scene.walls);
+      this.pathIndex = 1; // Skip the first point (current position)
+    } else {
+      this.currentPath = [];
+      this.pathIndex = 0;
+    }
+  }
+
+  /**
+   * Get the next waypoint to move toward
+   */
+  getNextWaypoint() {
+    if (this.currentPath.length > 0 && this.pathIndex < this.currentPath.length) {
+      return this.currentPath[this.pathIndex];
+    }
+    return null;
+  }
+
+  /**
+   * Advance to the next waypoint in the path
+   */
+  advanceWaypoint() {
+    this.pathIndex++;
+    if (this.pathIndex >= this.currentPath.length) {
+      this.currentPath = [];
+      this.pathIndex = 0;
     }
   }
 
@@ -347,37 +511,66 @@ export class Police {
       return;
     }
 
-    let currentTargetX = this.intermediateTargetX ?? this.targetX;
-    let currentTargetY = this.intermediateTargetY ?? this.targetY;
-
     // Continuously update target when chasing
     if (this.state === CopState.CHASING) {
       const player = this.scene.player;
       if (player?.sprite) {
-        currentTargetX = player.sprite.x;
-        currentTargetY = player.sprite.y;
+        this.targetX = player.sprite.x;
+        this.targetY = player.sprite.y;
         this.lastSeenPlayerX = player.sprite.x;
         this.lastSeenPlayerY = player.sprite.y;
+
+        // Recalculate path periodically while chasing
+        this.pathRecalcTimer += delta;
+        if (this.pathRecalcTimer > 500) {
+          this.pathRecalcTimer = 0;
+          // Only recalc if no direct line of sight
+          if (!LineOfSight.hasLineOfSight(
+            this.sprite.x, this.sprite.y,
+            player.sprite.x, player.sprite.y,
+            this.scene.walls
+          )) {
+            this.recalculatePath();
+          } else {
+            // Clear path, move directly
+            this.currentPath = [];
+            this.pathIndex = 0;
+          }
+        }
       }
+    }
+
+    // Determine current movement target
+    let currentTargetX, currentTargetY;
+    const waypoint = this.getNextWaypoint();
+
+    if (waypoint) {
+      currentTargetX = waypoint.x;
+      currentTargetY = waypoint.y;
+    } else {
+      currentTargetX = this.targetX;
+      currentTargetY = this.targetY;
     }
 
     const dx = currentTargetX - this.sprite.x;
     const dy = currentTargetY - this.sprite.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Check if reached intermediate target
-    if (this.intermediateTargetX !== undefined && distance < 16) {
-      this.intermediateTargetX = undefined;
-      this.intermediateTargetY = undefined;
+    // Check if reached current waypoint
+    if (waypoint && distance < 12) {
+      this.advanceWaypoint();
       return;
     }
 
     const speed = this.state === CopState.CHASING ? this.chaseSpeed : this.baseSpeed;
 
-    if (distance < 8) {
+    // Check if reached final target
+    if (!waypoint && distance < 8) {
       this.isWaiting = true;
       this.waitTimer = this.getWaitTime();
       this.sprite.setVelocity(0, 0);
+      this.currentPath = [];
+      this.pathIndex = 0;
     } else {
       const vx = (dx / distance) * speed;
       const vy = (dy / distance) * speed;
@@ -496,6 +689,11 @@ export class Police {
     this.isAlive = false;
     this.isDetecting = false;
     this.sprite.clearTint();
+
+    // Unregister from action system
+    if (this.scene.actionSystem) {
+      this.scene.actionSystem.unregisterObject(this.sprite);
+    }
 
     const deathX = this.sprite.x;
     const deathY = this.sprite.y;

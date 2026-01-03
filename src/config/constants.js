@@ -27,6 +27,18 @@ export const HUMAN = {
   WAIT_TIME_MAX: 3000
 };
 
+// Trust system
+export const TRUST = {
+  MAX_TRUST: 3,
+  TALK_COOLDOWN: 1000,       // ms
+  FOLLOW_MAX_TILES: 20,
+  STOP_CHANCE_5_TILES: 0.10,   // 10% chance to stop at 5 tiles
+  STOP_CHANCE_10_TILES: 0.30,  // 30% chance at 10 tiles
+  STOP_CHANCE_15_TILES: 0.50,  // 50% chance at 15 tiles
+  STOP_PAUSE_DURATION: 3000,   // 3 seconds pause when stopping
+  FOLLOW_DISTANCE: 24          // pixels - how close they follow
+};
+
 // Police settings
 export const POLICE = {
   BASE_SPEED: 64,
@@ -134,8 +146,8 @@ export const TOWN = {
 
 // Minimap settings
 export const MINIMAP = {
-  WIDTH: 120,
-  HEIGHT: 120,
+  WIDTH: 240,
+  HEIGHT: 240,
   PADDING: 10,
   BORDER_WIDTH: 2,
   COLORS: {

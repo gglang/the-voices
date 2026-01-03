@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { RITUAL, DEPTH, EFFECTS } from '../config/constants.js';
+import { ActionSystem } from './ActionSystem.js';
 
 /**
  * Manages satanic ritual sites and sacrifices
@@ -107,8 +108,34 @@ export class RitualSystem {
       radius: RITUAL.ACTIVATION_RADIUS
     };
 
+    // Register with action system for sacrifice action
+    this.registerSiteActions(siteData);
+
     this.sites.push(siteData);
     return siteData;
+  }
+
+  /**
+   * Register sacrifice site with action system
+   */
+  registerSiteActions(siteData) {
+    if (!this.scene.actionSystem) return;
+
+    this.scene.actionSystem.registerObject(siteData.sprite, {
+      owner: siteData,
+      getActions: () => {
+        // Only show sacrifice action if player is carrying a corpse
+        if (!this.scene.player?.carriedCorpse) return [];
+        return [
+          {
+            name: 'Sacrifice',
+            key: 'SPACE',
+            keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
+            callback: () => this.scene.player?.dropCorpse()
+          }
+        ];
+      }
+    });
   }
 
   /**

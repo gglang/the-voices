@@ -5,10 +5,15 @@ export class HUD {
     // Store all UI elements for camera management
     this.uiElements = [];
 
-    // Cooldown state
+    // Knife cooldown state
     this.cooldownActive = false;
     this.cooldownStartTime = 0;
     this.cooldownDuration = 1000;
+
+    // Talk cooldown state
+    this.talkCooldownActive = false;
+    this.talkCooldownStartTime = 0;
+    this.talkCooldownDuration = 1000;
 
     // Score display (top right)
     this.scoreText = scene.add.text(0, 0, 'Score: 0', {
@@ -152,7 +157,31 @@ export class HUD {
     });
     this.uiElements.push(this.playAgainText);
 
-    // Knife icon background (bottom right)
+    // Identification status widget (above knife icon)
+    this.idStatusBg = scene.add.graphics();
+    this.idStatusBg.setScrollFactor(0);
+    this.idStatusBg.setDepth(1000);
+    this.uiElements.push(this.idStatusBg);
+
+    this.idStatusText = scene.add.text(0, 0, 'INCOGNITO', {
+      fontSize: '10px',
+      fontFamily: 'monospace',
+      color: '#00ff00',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.idStatusText.setOrigin(0.5, 0.5);
+    this.idStatusText.setScrollFactor(0);
+    this.idStatusText.setDepth(1001);
+    this.uiElements.push(this.idStatusText);
+
+    // Eye icon for identification status
+    this.idEyeIcon = scene.add.graphics();
+    this.idEyeIcon.setScrollFactor(0);
+    this.idEyeIcon.setDepth(1001);
+    this.uiElements.push(this.idEyeIcon);
+
+    // Knife icon background (bottom right) - 2x size
     this.knifeBackground = scene.add.graphics();
     this.knifeBackground.setScrollFactor(0);
     this.knifeBackground.setDepth(1000);
@@ -170,11 +199,31 @@ export class HUD {
     this.knifeIcon.setDepth(1002);
     this.uiElements.push(this.knifeIcon);
 
-    // Draw initial knife graphics
-    this.drawKnifeIcon();
+    // Talk icon background (left of knife icon)
+    this.talkBackground = scene.add.graphics();
+    this.talkBackground.setScrollFactor(0);
+    this.talkBackground.setDepth(1000);
+    this.uiElements.push(this.talkBackground);
 
-    // Update cooldown every frame
-    scene.events.on('update', this.updateCooldown, this);
+    // Talk cooldown overlay
+    this.talkCooldown = scene.add.graphics();
+    this.talkCooldown.setScrollFactor(0);
+    this.talkCooldown.setDepth(1001);
+    this.uiElements.push(this.talkCooldown);
+
+    // Talk icon (speech bubble)
+    this.talkIcon = scene.add.graphics();
+    this.talkIcon.setScrollFactor(0);
+    this.talkIcon.setDepth(1002);
+    this.uiElements.push(this.talkIcon);
+
+    // Draw initial graphics
+    this.drawKnifeIcon();
+    this.drawTalkIcon();
+    this.drawIdStatus();
+
+    // Update cooldown and ID status every frame
+    scene.events.on('update', this.updateFrame, this);
 
     // Create a dedicated UI camera that only renders UI elements
     this.uiCamera = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height);
@@ -237,10 +286,20 @@ export class HUD {
     this.finalScoreText.setPosition(width / 2, height / 2);
     this.playAgainText.setPosition(width / 2, height / 2 + 50);
 
-    // Knife icon (bottom right)
-    this.knifeX = width - padding - 20;
-    this.knifeY = height - padding - 20;
+    // Knife icon (bottom right) - 2x bigger, so offset by 36 instead of 20
+    this.knifeX = width - padding - 36;
+    this.knifeY = height - padding - 36;
     this.drawKnifeIcon();
+
+    // Talk icon (left of knife icon)
+    this.talkX = this.knifeX - 60;
+    this.talkY = this.knifeY;
+    this.drawTalkIcon();
+
+    // Identification status (above knife icon)
+    this.idStatusX = this.knifeX;
+    this.idStatusY = this.knifeY - 60; // Above the knife
+    this.drawIdStatus();
   }
 
   drawKnifeIcon() {
@@ -248,39 +307,91 @@ export class HUD {
 
     const x = this.knifeX || 0;
     const y = this.knifeY || 0;
-    const radius = 18;
+    const radius = 36; // 2x size (was 18)
 
     // Draw background circle
     this.knifeBackground.clear();
     this.knifeBackground.fillStyle(0x333333, 0.8);
     this.knifeBackground.fillCircle(x, y, radius);
-    this.knifeBackground.lineStyle(2, 0x666666);
+    this.knifeBackground.lineStyle(3, 0x666666);
     this.knifeBackground.strokeCircle(x, y, radius);
 
-    // Draw knife icon
+    // Draw knife icon (2x size)
     this.knifeIcon.clear();
     this.knifeIcon.fillStyle(0xcccccc);
 
-    // Blade (triangular)
+    // Blade (triangular) - 2x size
     this.knifeIcon.beginPath();
-    this.knifeIcon.moveTo(x - 2, y - 12);  // tip
-    this.knifeIcon.lineTo(x + 3, y - 2);   // right edge
-    this.knifeIcon.lineTo(x - 2, y - 2);   // left edge
+    this.knifeIcon.moveTo(x - 4, y - 24);  // tip
+    this.knifeIcon.lineTo(x + 6, y - 4);   // right edge
+    this.knifeIcon.lineTo(x - 4, y - 4);   // left edge
     this.knifeIcon.closePath();
     this.knifeIcon.fillPath();
 
-    // Handle
+    // Handle - 2x size
     this.knifeIcon.fillStyle(0x8B4513);  // brown
-    this.knifeIcon.fillRect(x - 3, y - 2, 6, 12);
+    this.knifeIcon.fillRect(x - 6, y - 4, 12, 24);
 
-    // Handle guard
+    // Handle guard - 2x size
     this.knifeIcon.fillStyle(0x666666);
-    this.knifeIcon.fillRect(x - 5, y - 3, 10, 3);
+    this.knifeIcon.fillRect(x - 10, y - 6, 20, 6);
+  }
+
+  drawTalkIcon() {
+    if (!this.talkBackground || !this.talkIcon) return;
+
+    const x = this.talkX || 0;
+    const y = this.talkY || 0;
+    const radius = 20;
+
+    // Draw background circle
+    this.talkBackground.clear();
+    this.talkBackground.fillStyle(0x333333, 0.8);
+    this.talkBackground.fillCircle(x, y, radius);
+    this.talkBackground.lineStyle(2, 0x666666);
+    this.talkBackground.strokeCircle(x, y, radius);
+
+    // Draw speech bubble icon
+    this.talkIcon.clear();
+    this.talkIcon.fillStyle(0x3498db); // Blue
+
+    // Speech bubble body (rounded rectangle-ish)
+    this.talkIcon.beginPath();
+    this.talkIcon.moveTo(x - 8, y - 6);
+    this.talkIcon.lineTo(x + 8, y - 6);
+    this.talkIcon.arc(x + 8, y - 2, 4, -Math.PI / 2, Math.PI / 2);
+    this.talkIcon.lineTo(x - 8, y + 2);
+    this.talkIcon.arc(x - 8, y - 2, 4, Math.PI / 2, -Math.PI / 2);
+    this.talkIcon.closePath();
+    this.talkIcon.fillPath();
+
+    // Speech bubble tail
+    this.talkIcon.beginPath();
+    this.talkIcon.moveTo(x - 4, y + 2);
+    this.talkIcon.lineTo(x - 6, y + 8);
+    this.talkIcon.lineTo(x + 2, y + 2);
+    this.talkIcon.closePath();
+    this.talkIcon.fillPath();
   }
 
   triggerCooldown() {
     this.cooldownActive = true;
     this.cooldownStartTime = this.scene.time.now;
+  }
+
+  triggerTalkCooldown() {
+    this.talkCooldownActive = true;
+    this.talkCooldownStartTime = this.scene.time.now;
+  }
+
+  canTalk() {
+    return !this.talkCooldownActive;
+  }
+
+  updateFrame() {
+    this.updateCooldown();
+    this.updateTalkCooldown();
+    this.updateIdStatus();
   }
 
   updateCooldown() {
@@ -297,7 +408,7 @@ export class HUD {
 
     const x = this.knifeX || 0;
     const y = this.knifeY || 0;
-    const radius = 18;
+    const radius = 36; // 2x size (was 18)
 
     // Draw cooldown overlay as a "pie slice" that shrinks
     this.knifeCooldown.clear();
@@ -312,6 +423,104 @@ export class HUD {
     this.knifeCooldown.arc(x, y, radius, startAngle, endAngle, false);
     this.knifeCooldown.closePath();
     this.knifeCooldown.fillPath();
+  }
+
+  updateTalkCooldown() {
+    if (!this.talkCooldownActive || !this.talkCooldown) return;
+
+    const elapsed = this.scene.time.now - this.talkCooldownStartTime;
+    const progress = Math.min(elapsed / this.talkCooldownDuration, 1);
+
+    if (progress >= 1) {
+      this.talkCooldownActive = false;
+      this.talkCooldown.clear();
+      return;
+    }
+
+    const x = this.talkX || 0;
+    const y = this.talkY || 0;
+    const radius = 20;
+
+    // Draw cooldown overlay as a "pie slice" that shrinks
+    this.talkCooldown.clear();
+    this.talkCooldown.fillStyle(0x000000, 0.6);
+
+    // Calculate the arc from top (start) going clockwise
+    const startAngle = -Math.PI / 2; // Start at top
+    const endAngle = startAngle + (1 - progress) * Math.PI * 2;
+
+    this.talkCooldown.beginPath();
+    this.talkCooldown.moveTo(x, y);
+    this.talkCooldown.arc(x, y, radius, startAngle, endAngle, false);
+    this.talkCooldown.closePath();
+    this.talkCooldown.fillPath();
+  }
+
+  drawIdStatus() {
+    if (!this.idStatusBg || !this.idEyeIcon) return;
+
+    const x = this.idStatusX || 0;
+    const y = this.idStatusY || 0;
+    const isIdentified = this.scene.playerIdentified || false;
+
+    // Draw background pill (wider to fit INCOGNITO)
+    this.idStatusBg.clear();
+    this.idStatusBg.fillStyle(isIdentified ? 0x660000 : 0x003300, 0.85);
+    this.idStatusBg.fillRoundedRect(x - 50, y - 12, 100, 24, 8);
+    this.idStatusBg.lineStyle(2, isIdentified ? 0xff0000 : 0x00ff00, 0.8);
+    this.idStatusBg.strokeRoundedRect(x - 50, y - 12, 100, 24, 8);
+
+    // Update text
+    if (this.idStatusText) {
+      this.idStatusText.setPosition(x + 8, y);
+      this.idStatusText.setText(isIdentified ? 'WANTED' : 'INCOGNITO');
+      this.idStatusText.setColor(isIdentified ? '#ff4444' : '#44ff44');
+    }
+
+    // Draw eye icon
+    this.idEyeIcon.clear();
+    const eyeX = x - 24;
+    const eyeY = y;
+
+    if (isIdentified) {
+      // Open eye (red) - you're being watched!
+      this.idEyeIcon.lineStyle(2, 0xff4444);
+      // Eye outline
+      this.idEyeIcon.beginPath();
+      this.idEyeIcon.arc(eyeX, eyeY, 6, 0.3, Math.PI - 0.3);
+      this.idEyeIcon.strokePath();
+      this.idEyeIcon.beginPath();
+      this.idEyeIcon.arc(eyeX, eyeY, 6, Math.PI + 0.3, -0.3);
+      this.idEyeIcon.strokePath();
+      // Pupil
+      this.idEyeIcon.fillStyle(0xff4444);
+      this.idEyeIcon.fillCircle(eyeX, eyeY, 3);
+    } else {
+      // Closed eye (green) - hidden
+      this.idEyeIcon.lineStyle(2, 0x44ff44);
+      // Closed eye line
+      this.idEyeIcon.beginPath();
+      this.idEyeIcon.moveTo(eyeX - 6, eyeY);
+      this.idEyeIcon.lineTo(eyeX + 6, eyeY);
+      this.idEyeIcon.strokePath();
+      // Eyelashes
+      this.idEyeIcon.beginPath();
+      this.idEyeIcon.moveTo(eyeX - 4, eyeY);
+      this.idEyeIcon.lineTo(eyeX - 5, eyeY + 3);
+      this.idEyeIcon.strokePath();
+      this.idEyeIcon.beginPath();
+      this.idEyeIcon.moveTo(eyeX, eyeY);
+      this.idEyeIcon.lineTo(eyeX, eyeY + 4);
+      this.idEyeIcon.strokePath();
+      this.idEyeIcon.beginPath();
+      this.idEyeIcon.moveTo(eyeX + 4, eyeY);
+      this.idEyeIcon.lineTo(eyeX + 5, eyeY + 3);
+      this.idEyeIcon.strokePath();
+    }
+  }
+
+  updateIdStatus() {
+    this.drawIdStatus();
   }
 
   setScore(score) {
@@ -351,7 +560,7 @@ export class HUD {
 
   destroy() {
     this.scene.scale.off('resize', this.updatePositions, this);
-    this.scene.events.off('update', this.updateCooldown, this);
+    this.scene.events.off('update', this.updateFrame, this);
     if (this.uiCamera) {
       this.scene.cameras.remove(this.uiCamera);
     }
