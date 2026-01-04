@@ -1,4 +1,4 @@
-import { HAIR_COLORS, SKIN_COLORS } from '../config/constants.js';
+import { HAIR_COLORS, SKIN_COLORS, NEIGHBORHOODS, HOUSE_TYPES } from '../config/constants.js';
 
 /**
  * Factory class for generating all game textures programmatically
@@ -39,6 +39,17 @@ export class TextureFactory {
     this.createTree();
     this.createFurniture();
     this.createPoliceSign();
+    // Neighborhood-specific textures
+    this.createAllNeighborhoodTextures();
+    this.createAllHouseTypeTextures();
+    this.createPlayerHomeMarker();
+    this.createBasementTextures();
+    // Neighborhood decorations
+    this.createFlowerTextures();
+    this.createDirtPatch();
+    this.createTrash();
+    // Effects
+    this.createZzzIcon();
   }
 
   /**
@@ -631,5 +642,504 @@ export class TextureFactory {
     g.fillRect(26, 9, 3, 1);
 
     g.generateTexture('police_sign', 32, 12);
+  }
+
+  // ==================== Neighborhood Textures ====================
+
+  /**
+   * Create all neighborhood-specific ground textures
+   */
+  createAllNeighborhoodTextures() {
+    for (const [key, config] of Object.entries(NEIGHBORHOODS)) {
+      this.createNeighborhoodGrass(config.name, config.grass);
+      this.createNeighborhoodRoad(config.name, config.road);
+      this.createNeighborhoodSidewalk(config.name, config.sidewalk);
+    }
+  }
+
+  /**
+   * Create grass texture for a neighborhood
+   */
+  createNeighborhoodGrass(name, colors) {
+    const key = `grass_${name}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Base grass
+    g.fillStyle(colors.base);
+    g.fillRect(0, 0, 16, 16);
+    // Grass variation - lighter patches
+    g.fillStyle(colors.light);
+    g.fillRect(1, 1, 3, 2);
+    g.fillRect(8, 5, 4, 2);
+    g.fillRect(3, 11, 3, 2);
+    // Darker patches
+    g.fillStyle(colors.dark);
+    g.fillRect(12, 2, 2, 2);
+    g.fillRect(5, 8, 2, 2);
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create road texture for a neighborhood
+   */
+  createNeighborhoodRoad(name, colors) {
+    const key = `road_${name}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Asphalt base
+    g.fillStyle(colors.base);
+    g.fillRect(0, 0, 16, 16);
+    // Subtle texture variation
+    g.fillStyle(colors.light);
+    g.fillRect(2, 2, 4, 4);
+    g.fillRect(10, 8, 4, 4);
+    g.fillStyle(colors.dark);
+    g.fillRect(6, 10, 3, 3);
+    // Poor roads get cracks
+    if (name === 'poor') {
+      g.lineStyle(1, colors.dark);
+      g.lineBetween(3, 1, 7, 5);
+      g.lineBetween(10, 12, 14, 8);
+    }
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create sidewalk texture for a neighborhood
+   */
+  createNeighborhoodSidewalk(name, colors) {
+    const key = `sidewalk_${name}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Base concrete
+    g.fillStyle(colors.base);
+    g.fillRect(0, 0, 16, 16);
+    // Tile pattern
+    g.lineStyle(1, colors.dark);
+    g.lineBetween(8, 0, 8, 16);
+    g.lineBetween(0, 8, 16, 8);
+    // Light edge
+    g.fillStyle(colors.light);
+    g.fillRect(0, 0, 16, 1);
+    g.fillRect(0, 0, 1, 16);
+    // Poor sidewalks get cracks
+    if (name === 'poor') {
+      g.lineStyle(1, colors.dark);
+      g.lineBetween(2, 3, 6, 7);
+      g.lineBetween(11, 10, 14, 14);
+    }
+    g.generateTexture(key, 16, 16);
+  }
+
+  // ==================== House Type Textures ====================
+
+  /**
+   * Create all house type textures
+   */
+  createAllHouseTypeTextures() {
+    for (const [type, config] of Object.entries(HOUSE_TYPES)) {
+      this.createHouseTypeWall(type, config.wall);
+      this.createHouseTypeRoof(type, config.roof);
+      this.createHouseTypeFloor(type, config.floor);
+    }
+  }
+
+  /**
+   * Create wall texture for a house type
+   */
+  createHouseTypeWall(type, color) {
+    const key = `wall_${type}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Base wall color
+    g.fillStyle(color);
+    g.fillRect(0, 0, 16, 16);
+
+    // Derive darker color for detail
+    const r = (color >> 16) & 0xff;
+    const gVal = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const darkColor = ((Math.floor(r * 0.7)) << 16) | ((Math.floor(gVal * 0.7)) << 8) | Math.floor(b * 0.7);
+
+    // Plank/brick lines based on type
+    g.lineStyle(1, darkColor);
+    if (type === 'trailer') {
+      // Metal siding
+      g.lineBetween(0, 4, 16, 4);
+      g.lineBetween(0, 8, 16, 8);
+      g.lineBetween(0, 12, 16, 12);
+    } else if (type === 'mansion' || type === 'colonial' || type === 'modern') {
+      // Fancy brick pattern
+      g.lineBetween(0, 4, 16, 4);
+      g.lineBetween(0, 8, 16, 8);
+      g.lineBetween(0, 12, 16, 12);
+      g.lineBetween(4, 0, 4, 4);
+      g.lineBetween(12, 0, 12, 4);
+      g.lineBetween(8, 4, 8, 8);
+      g.lineBetween(4, 8, 4, 12);
+      g.lineBetween(12, 8, 12, 12);
+      g.lineBetween(8, 12, 8, 16);
+    } else {
+      // Wood plank pattern
+      g.lineBetween(0, 4, 16, 4);
+      g.lineBetween(0, 8, 16, 8);
+      g.lineBetween(0, 12, 16, 12);
+      g.lineBetween(8, 0, 8, 16);
+    }
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create roof texture for a house type
+   */
+  createHouseTypeRoof(type, color) {
+    const key = `roof_${type}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Base roof color
+    g.fillStyle(color);
+    g.fillRect(0, 0, 16, 16);
+
+    // Derive darker color for shingles
+    const r = (color >> 16) & 0xff;
+    const gVal = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const darkColor = ((Math.floor(r * 0.7)) << 16) | ((Math.floor(gVal * 0.7)) << 8) | Math.floor(b * 0.7);
+
+    // Shingle pattern
+    g.fillStyle(darkColor);
+    if (type === 'trailer') {
+      // Flat metal roof
+      g.fillRect(0, 7, 16, 2);
+    } else if (type === 'modern') {
+      // Flat modern roof
+      g.fillRect(0, 0, 8, 8);
+      g.fillRect(8, 8, 8, 8);
+    } else {
+      // Traditional shingles
+      g.fillRect(0, 0, 8, 4);
+      g.fillRect(8, 4, 8, 4);
+      g.fillRect(0, 8, 8, 4);
+      g.fillRect(8, 12, 8, 4);
+    }
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create floor texture for a house type
+   */
+  createHouseTypeFloor(type, color) {
+    const key = `floor_${type}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Base floor color
+    g.fillStyle(color);
+    g.fillRect(0, 0, 16, 16);
+
+    // Derive darker color for detail
+    const r = (color >> 16) & 0xff;
+    const gVal = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const darkColor = ((Math.floor(r * 0.8)) << 16) | ((Math.floor(gVal * 0.8)) << 8) | Math.floor(b * 0.8);
+
+    // Plank lines
+    g.lineStyle(1, darkColor);
+    g.lineBetween(0, 0, 16, 0);
+    g.lineBetween(4, 0, 4, 16);
+    g.lineBetween(12, 0, 12, 16);
+    g.generateTexture(key, 16, 16);
+  }
+
+  // ==================== Player Home Textures ====================
+
+  /**
+   * Create skull marker for player's home yard
+   */
+  createPlayerHomeMarker() {
+    const key = 'player_home_marker';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Skull shape
+    g.fillStyle(0xe0e0e0); // Bone white
+    // Skull dome
+    g.fillCircle(8, 6, 5);
+    // Jaw
+    g.fillRect(4, 8, 8, 4);
+    g.fillRect(5, 12, 6, 2);
+
+    // Eye sockets
+    g.fillStyle(0x1a1a1a);
+    g.fillCircle(6, 5, 2);
+    g.fillCircle(10, 5, 2);
+
+    // Nose hole
+    g.fillStyle(0x2a2a2a);
+    g.fillRect(7, 8, 2, 2);
+
+    // Teeth
+    g.fillStyle(0x1a1a1a);
+    g.fillRect(5, 10, 1, 2);
+    g.fillRect(7, 10, 1, 2);
+    g.fillRect(9, 10, 1, 2);
+
+    // Dead plant behind skull
+    g.fillStyle(0x4a3a2a);
+    g.fillRect(2, 2, 2, 10);
+    g.fillRect(12, 3, 2, 9);
+    g.fillStyle(0x3a2a1a);
+    g.fillRect(1, 0, 2, 3);
+    g.fillRect(13, 1, 2, 3);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create basement-specific textures
+   */
+  createBasementTextures() {
+    this.createBasementFloor();
+    this.createBasementWall();
+    this.createFloorHatch();
+  }
+
+  /**
+   * Create dark basement floor
+   */
+  createBasementFloor() {
+    const key = 'basement_floor';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Dark stone
+    g.fillStyle(0x2a2a2a);
+    g.fillRect(0, 0, 16, 16);
+    // Stone pattern
+    g.fillStyle(0x3a3a3a);
+    g.fillRect(1, 1, 6, 6);
+    g.fillRect(9, 9, 6, 6);
+    g.fillStyle(0x222222);
+    g.fillRect(8, 1, 6, 6);
+    g.fillRect(1, 9, 6, 6);
+    // Grout lines
+    g.lineStyle(1, 0x1a1a1a);
+    g.lineBetween(8, 0, 8, 16);
+    g.lineBetween(0, 8, 16, 8);
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create basement wall (darker version)
+   */
+  createBasementWall() {
+    const key = 'basement_wall';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Dark stone bricks
+    g.fillStyle(0x3a3a3a);
+    g.fillRect(0, 0, 16, 16);
+    // Brick pattern
+    g.lineStyle(1, 0x2a2a2a);
+    g.lineBetween(0, 4, 16, 4);
+    g.lineBetween(0, 8, 16, 8);
+    g.lineBetween(0, 12, 16, 12);
+    g.lineBetween(8, 0, 8, 4);
+    g.lineBetween(4, 4, 4, 8);
+    g.lineBetween(12, 4, 12, 8);
+    g.lineBetween(8, 8, 8, 12);
+    g.lineBetween(4, 12, 4, 16);
+    g.lineBetween(12, 12, 12, 16);
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create floor hatch leading to basement
+   */
+  createFloorHatch() {
+    const key = 'floor_hatch';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    // Wooden frame
+    g.fillStyle(0x5a4a3a);
+    g.fillRect(0, 0, 16, 16);
+    // Inner hatch
+    g.fillStyle(0x4a3a2a);
+    g.fillRect(2, 2, 12, 12);
+    // Handle
+    g.fillStyle(0x888888);
+    g.fillRect(6, 7, 4, 2);
+    // Hinges
+    g.fillStyle(0x666666);
+    g.fillRect(1, 3, 2, 3);
+    g.fillRect(1, 10, 2, 3);
+    // Dark gap showing basement
+    g.fillStyle(0x1a1a1a);
+    g.fillRect(13, 2, 1, 12);
+    g.generateTexture(key, 16, 16);
+  }
+
+  // ==================== Neighborhood Decoration Textures ====================
+
+  /**
+   * Create flower textures for rich neighborhood
+   */
+  createFlowerTextures() {
+    // Red flowers
+    this.createFlower('flower_red', 0xff4444, 0xffaaaa);
+    // Yellow flowers
+    this.createFlower('flower_yellow', 0xffff44, 0xffffaa);
+    // Purple flowers
+    this.createFlower('flower_purple', 0xaa44ff, 0xddaaff);
+    // Pink flowers
+    this.createFlower('flower_pink', 0xff88cc, 0xffccee);
+    // White flowers
+    this.createFlower('flower_white', 0xeeeeee, 0xffffff);
+  }
+
+  createFlower(key, petalColor, centerColor) {
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Stem
+    g.fillStyle(0x228822);
+    g.fillRect(7, 8, 2, 8);
+
+    // Leaves
+    g.fillStyle(0x33aa33);
+    g.fillRect(5, 10, 3, 2);
+    g.fillRect(8, 12, 3, 2);
+
+    // Petals (5 around center)
+    g.fillStyle(petalColor);
+    g.fillCircle(8, 3, 3);   // top
+    g.fillCircle(5, 5, 2);   // left
+    g.fillCircle(11, 5, 2);  // right
+    g.fillCircle(6, 7, 2);   // bottom left
+    g.fillCircle(10, 7, 2);  // bottom right
+
+    // Center
+    g.fillStyle(centerColor);
+    g.fillCircle(8, 5, 2);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create dirt patch texture for poor neighborhood
+   */
+  createDirtPatch() {
+    const key = 'dirt_patch';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Base dirt color
+    g.fillStyle(0x4a3a2a);
+    g.fillCircle(8, 8, 6);
+
+    // Darker patches
+    g.fillStyle(0x3a2a1a);
+    g.fillCircle(5, 6, 2);
+    g.fillCircle(10, 9, 2);
+    g.fillCircle(7, 11, 2);
+
+    // Lighter spots (dried mud)
+    g.fillStyle(0x5a4a3a);
+    g.fillRect(6, 4, 3, 2);
+    g.fillRect(9, 7, 2, 2);
+
+    // Cracks
+    g.lineStyle(1, 0x2a1a0a);
+    g.lineBetween(4, 5, 9, 10);
+    g.lineBetween(6, 9, 11, 6);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create trash/debris texture for poor neighborhood
+   */
+  createTrash() {
+    const key = 'trash';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Crumpled paper/bag
+    g.fillStyle(0x9a8a7a);
+    g.fillRect(2, 4, 5, 4);
+    g.fillStyle(0x7a6a5a);
+    g.fillRect(3, 5, 3, 2);
+
+    // Can
+    g.fillStyle(0x666666);
+    g.fillRect(8, 6, 4, 6);
+    g.fillStyle(0x888888);
+    g.fillRect(9, 6, 2, 1);
+    g.fillStyle(0x555555);
+    g.fillRect(8, 8, 4, 2);
+
+    // Bottle
+    g.fillStyle(0x558855);
+    g.fillRect(4, 9, 3, 5);
+    g.fillStyle(0x446644);
+    g.fillRect(5, 7, 1, 3);
+
+    // Random debris
+    g.fillStyle(0x5a4a3a);
+    g.fillRect(12, 10, 2, 3);
+    g.fillStyle(0x4a5a6a);
+    g.fillRect(1, 11, 2, 2);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create ZZZ sleep icon for sleepy effect
+   */
+  createZzzIcon() {
+    const key = 'zzz_icon';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Draw three Z's in increasing size
+    g.fillStyle(0xaaaaff);
+
+    // Small Z (top right)
+    g.fillRect(10, 1, 4, 1);
+    g.fillRect(13, 2, 1, 1);
+    g.fillRect(12, 3, 1, 1);
+    g.fillRect(11, 4, 1, 1);
+    g.fillRect(10, 5, 4, 1);
+
+    // Medium Z (middle)
+    g.fillRect(5, 5, 5, 1);
+    g.fillRect(9, 6, 1, 1);
+    g.fillRect(8, 7, 1, 1);
+    g.fillRect(7, 8, 1, 1);
+    g.fillRect(6, 9, 1, 1);
+    g.fillRect(5, 10, 5, 1);
+
+    // Large Z (bottom left)
+    g.fillRect(1, 9, 6, 1);
+    g.fillRect(6, 10, 1, 1);
+    g.fillRect(5, 11, 1, 1);
+    g.fillRect(4, 12, 1, 1);
+    g.fillRect(3, 13, 1, 1);
+    g.fillRect(2, 14, 1, 1);
+    g.fillRect(1, 15, 6, 1);
+
+    g.generateTexture(key, 16, 16);
   }
 }

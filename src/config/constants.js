@@ -144,6 +144,49 @@ export const TOWN = {
   INITIAL_COP_COUNT: 6
 };
 
+// Neighborhood configurations
+export const NEIGHBORHOODS = {
+  POOR: {
+    name: 'poor',
+    grass: { base: 0x2a4a1a, light: 0x3a5a2a, dark: 0x1a3a0a },
+    road: { base: 0x2a2a2a, light: 0x353535, dark: 0x202020 },
+    sidewalk: { base: 0x666666, light: 0x777777, dark: 0x555555 },
+    houses: ['shack', 'rundown', 'trailer']
+  },
+  MEDIUM: {
+    name: 'medium',
+    grass: { base: 0x2d5a1e, light: 0x3d6a2e, dark: 0x1d4a0e },
+    road: { base: 0x3a3a3a, light: 0x454545, dark: 0x303030 },
+    sidewalk: { base: 0x888888, light: 0x999999, dark: 0x777777 },
+    houses: ['suburban', 'duplex', 'cottage']
+  },
+  RICH: {
+    name: 'rich',
+    grass: { base: 0x3d7a2e, light: 0x4d8a3e, dark: 0x2d6a1e },
+    road: { base: 0x4a4a4a, light: 0x555555, dark: 0x404040 },
+    sidewalk: { base: 0xaaaaaa, light: 0xbbbbbb, dark: 0x999999 },
+    houses: ['mansion', 'colonial', 'modern']
+  }
+};
+
+// House sizes by type
+export const HOUSE_TYPES = {
+  // Poor neighborhood houses - rusty browns/oranges, distinct from gray sidewalks
+  shack: { width: 5, height: 5, wall: 0x7a4020, roof: 0x3a2510, floor: 0x5a3a20 },
+  rundown: { width: 6, height: 5, wall: 0x8a5030, roof: 0x4a2a15, floor: 0x6a4a30 },
+  trailer: { width: 8, height: 4, wall: 0x6a5545, roof: 0x4a3a30, floor: 0x5a4a3a },
+  // Medium neighborhood houses
+  suburban: { width: 6, height: 6, wall: 0x8B4513, roof: 0x8B0000, floor: 0xA0522D },
+  duplex: { width: 7, height: 6, wall: 0x9B5523, roof: 0x7B0000, floor: 0xB0623D },
+  cottage: { width: 6, height: 5, wall: 0x7B3503, roof: 0x6B0000, floor: 0x905010 },
+  // Rich neighborhood houses
+  mansion: { width: 10, height: 8, wall: 0xd4a574, roof: 0x2a2a4a, floor: 0xc49564 },
+  colonial: { width: 8, height: 7, wall: 0xf5f5f5, roof: 0x1a1a2a, floor: 0xb08060 },
+  modern: { width: 9, height: 7, wall: 0xc0c0c0, roof: 0x3a3a3a, floor: 0xa09080 },
+  // Player home (medium neighborhood with basement)
+  player_home: { width: 7, height: 7, wall: 0x8B4513, roof: 0x5B0000, floor: 0xA0522D, hasBasement: true }
+};
+
 // Minimap settings
 export const MINIMAP = {
   WIDTH: 240,
@@ -156,9 +199,14 @@ export const MINIMAP = {
     PLAYER: 0x00ff00,
     CORPSE: 0xff0000,
     BUILDING: 0x8B4513,
+    BUILDING_POOR: 0x7a4020,
+    BUILDING_MEDIUM: 0x8B4513,
+    BUILDING_RICH: 0xd4a574,
+    PLAYER_HOME: 0x00ffff,
     POLICE_STATION: 0x1a237e,
     STORE: 0xdaa520,
     ROAD: 0x555555,
+    SIDEWALK: 0x777777,
     RITUAL_SITE: 0x8800cc,
     TREE: 0x228b22
   }

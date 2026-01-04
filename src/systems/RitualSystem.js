@@ -91,6 +91,16 @@ export class RitualSystem {
   }
 
   /**
+   * Register an existing ritual site (e.g., player home basement)
+   */
+  registerSite(siteData) {
+    // Register with action system for sacrifice action
+    this.registerSiteActions(siteData);
+    this.sites.push(siteData);
+    return siteData;
+  }
+
+  /**
    * Create a ritual site at position
    */
   createSite(x, y) {

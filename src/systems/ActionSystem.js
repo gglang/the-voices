@@ -6,7 +6,7 @@ import { LineOfSight } from '../utils/LineOfSight.js';
 export class ActionSystem {
   constructor(scene) {
     this.scene = scene;
-    this.actionRange = 16; // 1 tile
+    this.actionRange = 20; // Slightly more than 1 tile for easier interaction
     this.currentTarget = null;
     this.registeredObjects = new Map(); // Map of sprite -> action config
   }

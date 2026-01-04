@@ -145,17 +145,10 @@ export class HUD {
     this.playAgainText.setScrollFactor(0);
     this.playAgainText.setDepth(1002);
     this.playAgainText.setVisible(false);
-    this.playAgainText.setInteractive({ useHandCursor: true });
-    this.playAgainText.on('pointerover', () => {
-      this.playAgainText.setColor('#ffffff');
-    });
-    this.playAgainText.on('pointerout', () => {
-      this.playAgainText.setColor('#00ff00');
-    });
-    this.playAgainText.on('pointerdown', () => {
-      scene.scene.restart();
-    });
     this.uiElements.push(this.playAgainText);
+
+    // Store scene reference for later use
+    this.sceneRef = scene;
 
     // Identification status widget (above knife icon)
     this.idStatusBg = scene.add.graphics();
@@ -549,12 +542,52 @@ export class HUD {
     });
   }
 
-  showGameOver(finalScore) {
+  showGameOver(finalScore, customMessage = null) {
+    if (customMessage) {
+      this.gameOverText.setText(customMessage);
+      this.gameOverText.setFontSize('18px');
+      // Resize background for longer message
+      this.gameOverBg.setSize(350, 220);
+    } else {
+      this.gameOverText.setText('GAME OVER');
+      this.gameOverText.setFontSize('36px');
+      this.gameOverBg.setSize(300, 180);
+    }
     this.finalScoreText.setText(`Final Score: ${finalScore}`);
     this.gameOverBg.setVisible(true);
     this.gameOverText.setVisible(true);
     this.finalScoreText.setVisible(true);
     this.playAgainText.setVisible(true);
+
+    // Remove existing listeners if any
+    this.playAgainText.removeAllListeners();
+    this.playAgainText.removeInteractive();
+
+    // Make the play again button interactive
+    // Use a larger hit area to compensate for camera zoom issues
+    const bounds = this.playAgainText.getBounds();
+    this.playAgainText.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(
+        -bounds.width / 2 - 10,
+        -bounds.height / 2 - 5,
+        bounds.width + 20,
+        bounds.height + 10
+      ),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true
+    });
+
+    // Add event listeners
+    this.playAgainText.on('pointerover', () => {
+      this.playAgainText.setColor('#ffffff');
+    });
+    this.playAgainText.on('pointerout', () => {
+      this.playAgainText.setColor('#00ff00');
+    });
+    this.playAgainText.on('pointerdown', () => {
+      this.sceneRef.scene.restart();
+    });
+
     this.updatePositions();
   }
 

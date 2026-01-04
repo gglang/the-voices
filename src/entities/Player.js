@@ -17,6 +17,11 @@ export class Player {
     // Corpse carrying
     this.carriedCorpse = null;
 
+    // Sleepy effect
+    this.isSleepy = false;
+    this.zzzSprite = null;
+    this.zzzWiggleTime = 0;
+
     this.createSprite(x, y);
     this.setupInput();
     this.setupCollision();
@@ -255,7 +260,7 @@ export class Player {
 
   // ==================== Movement ====================
 
-  update() {
+  update(time, delta) {
     if (!this.canControl) {
       this.sprite.setVelocity(0, 0);
       return;
@@ -264,6 +269,7 @@ export class Player {
     const velocity = this.getInputVelocity();
     this.sprite.setVelocity(velocity.x, velocity.y);
     this.updateCarriedCorpse();
+    this.updateSleepyEffect(delta);
   }
 
   getInputVelocity() {
@@ -299,5 +305,62 @@ export class Player {
     if (this.carriedCorpse) {
       this.dropCorpse();
     }
+  }
+
+  // ==================== Sleepy Effect ====================
+
+  /**
+   * Start the sleepy effect (zzz icon above head)
+   */
+  startSleepyEffect() {
+    if (this.isSleepy) return;
+
+    this.isSleepy = true;
+
+    // Create zzz sprite
+    this.zzzSprite = this.scene.add.image(
+      this.sprite.x,
+      this.sprite.y - 20,
+      'zzz_icon'
+    );
+    this.zzzSprite.setDepth(DEPTH.EXCLAMATION);
+
+    if (this.scene.hud) {
+      this.scene.hud.ignoreGameObject(this.zzzSprite);
+    }
+  }
+
+  /**
+   * Stop the sleepy effect
+   */
+  stopSleepyEffect() {
+    this.isSleepy = false;
+
+    if (this.zzzSprite) {
+      this.zzzSprite.destroy();
+      this.zzzSprite = null;
+    }
+  }
+
+  /**
+   * Update the zzz sprite position and wiggle animation
+   */
+  updateSleepyEffect(delta) {
+    if (!this.isSleepy || !this.zzzSprite) return;
+
+    this.zzzWiggleTime += delta / 1000;
+
+    // Wiggle side to side
+    const wiggleX = Math.sin(this.zzzWiggleTime * 4) * 2;
+    // Bob up and down slightly
+    const wiggleY = Math.sin(this.zzzWiggleTime * 2) * 1;
+
+    this.zzzSprite.setPosition(
+      this.sprite.x + wiggleX,
+      this.sprite.y - 20 + wiggleY
+    );
+
+    // Slight rotation
+    this.zzzSprite.setRotation(Math.sin(this.zzzWiggleTime * 3) * 0.1);
   }
 }

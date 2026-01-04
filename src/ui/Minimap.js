@@ -92,6 +92,18 @@ export class Minimap {
       this.staticLayer.fillRect(rx, ry, rw, rh);
     }
 
+    // Draw sidewalks
+    if (this.townData.sidewalks) {
+      this.staticLayer.fillStyle(MINIMAP.COLORS.SIDEWALK);
+      for (const sidewalk of this.townData.sidewalks) {
+        const sx = this.x + sidewalk.x * this.townData.tileSize * this.scaleX;
+        const sy = this.y + sidewalk.y * this.townData.tileSize * this.scaleY;
+        const sw = sidewalk.width * this.townData.tileSize * this.scaleX;
+        const sh = sidewalk.height * this.townData.tileSize * this.scaleY;
+        this.staticLayer.fillRect(sx, sy, sw, sh);
+      }
+    }
+
     // Draw buildings
     for (const building of this.townData.buildings) {
       let color;
@@ -102,8 +114,18 @@ export class Minimap {
         case 'store':
           color = MINIMAP.COLORS.STORE;
           break;
+        case 'player_home':
+          color = MINIMAP.COLORS.PLAYER_HOME;
+          break;
         default:
-          color = MINIMAP.COLORS.BUILDING;
+          // Use neighborhood-specific colors for houses
+          if (building.neighborhood === 'poor') {
+            color = MINIMAP.COLORS.BUILDING_POOR;
+          } else if (building.neighborhood === 'rich') {
+            color = MINIMAP.COLORS.BUILDING_RICH;
+          } else {
+            color = MINIMAP.COLORS.BUILDING_MEDIUM;
+          }
       }
 
       this.staticLayer.fillStyle(color);

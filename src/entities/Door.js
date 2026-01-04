@@ -53,7 +53,10 @@ export class Door {
   }
 
   registerActions() {
-    if (!this.scene.actionSystem) return;
+    if (!this.scene.actionSystem) {
+      console.warn('Door: No action system available');
+      return;
+    }
 
     this.scene.actionSystem.registerObject(this.sprite, {
       owner: this,
@@ -61,22 +64,42 @@ export class Door {
     });
   }
 
+  /**
+   * Check if this door belongs to the player's home
+   */
+  isPlayerHomeDoor() {
+    const playerHome = this.scene.townGenerator?.getPlayerHome();
+    return playerHome && playerHome.id === this.buildingId;
+  }
+
   getAvailableActions() {
     const actions = [];
+    const isPlayerHome = this.isPlayerHomeDoor();
 
     if (this.state === DoorState.CLOSED) {
-      actions.push({
-        name: 'Knock',
-        key: 'T',
-        keyCode: Phaser.Input.Keyboard.KeyCodes.T,
-        callback: () => this.knock()
-      });
-      actions.push({
-        name: 'Break',
-        key: 'SPACE',
-        keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
-        callback: () => this.breakDown()
-      });
+      if (isPlayerHome) {
+        // Player's own home - can open directly
+        actions.push({
+          name: 'Open',
+          key: 'T',
+          keyCode: Phaser.Input.Keyboard.KeyCodes.T,
+          callback: () => this.open()
+        });
+      } else {
+        // Other houses - must knock
+        actions.push({
+          name: 'Knock',
+          key: 'T',
+          keyCode: Phaser.Input.Keyboard.KeyCodes.T,
+          callback: () => this.knock()
+        });
+        actions.push({
+          name: 'Break',
+          key: 'SPACE',
+          keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
+          callback: () => this.breakDown()
+        });
+      }
     } else if (this.state === DoorState.OPEN) {
       actions.push({
         name: 'Close',

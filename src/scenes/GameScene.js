@@ -5,6 +5,8 @@ import { Police } from '../entities/Police.js';
 import { HUD } from '../ui/HUD.js';
 import { Minimap } from '../ui/Minimap.js';
 import { ActionPopup } from '../ui/ActionPopup.js';
+import { ClockWidget } from '../ui/ClockWidget.js';
+import { SleepTransition } from '../ui/SleepTransition.js';
 import { TextureFactory } from '../utils/TextureFactory.js';
 import { CorpseManager } from '../systems/CorpseManager.js';
 import { IdentificationSystem } from '../systems/IdentificationSystem.js';
@@ -12,6 +14,7 @@ import { RitualSystem } from '../systems/RitualSystem.js';
 import { PoliceDispatcher } from '../systems/PoliceDispatcher.js';
 import { TownGenerator } from '../systems/TownGenerator.js';
 import { ActionSystem } from '../systems/ActionSystem.js';
+import { DayNightSystem } from '../systems/DayNightSystem.js';
 import {
   MAP, DEPTH, TOWN,
   HAIR_COLORS, SKIN_COLORS
@@ -37,6 +40,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnEntities();
     this.createHUD();
     this.createMinimap();
+    this.createDayNightSystem();
   }
 
   /**
@@ -45,6 +49,7 @@ export class GameScene extends Phaser.Scene {
   initializeGameState() {
     this.score = 0;
     this.isGameOver = false;
+    this.isSleeping = false;
     this.humans = [];
     this.police = [];
 
@@ -88,10 +93,19 @@ export class GameScene extends Phaser.Scene {
     // Generate the town
     this.townData = this.townGenerator.generate(this.mapWidth, this.mapHeight);
 
-    // Find a good spawn point for player (near town center, on road)
-    const centerX = mapPixelWidth / 2;
-    const centerY = mapPixelHeight / 2;
-    this.player = new Player(this, centerX, centerY);
+    // Spawn player inside their home
+    const playerHome = this.townGenerator.getPlayerHome();
+    let spawnX, spawnY;
+    if (playerHome) {
+      // Spawn in the center of the player's home (not in basement)
+      spawnX = (playerHome.x + playerHome.width / 2 + 1) * this.tileSize;
+      spawnY = (playerHome.y + playerHome.height / 2) * this.tileSize;
+    } else {
+      // Fallback to center
+      spawnX = mapPixelWidth / 2;
+      spawnY = mapPixelHeight / 2;
+    }
+    this.player = new Player(this, spawnX, spawnY);
 
     // Set up camera
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
@@ -109,7 +123,14 @@ export class GameScene extends Phaser.Scene {
   spawnEntities() {
     this.spawnHumans();
     this.spawnPolice();
-    // Spawn ritual sites in remote areas (corners of map)
+
+    // Register player home's basement ritual site with the ritual system
+    const playerHome = this.townGenerator.getPlayerHome();
+    if (playerHome?.ritualSite) {
+      this.ritualSystem.registerSite(playerHome.ritualSite);
+    }
+
+    // Also spawn additional ritual sites in remote areas (corners of map)
     this.ritualSystem.spawnSites(this.mapWidth, this.mapHeight, this.tileSize, this.walls);
   }
 
@@ -135,10 +156,20 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Create day/night cycle system and clock widget
+   */
+  createDayNightSystem() {
+    this.dayNightSystem = new DayNightSystem(this);
+    this.clockWidget = new ClockWidget(this, this.dayNightSystem);
+    this.clockWidget.registerWithHUD(this.hud);
+    this.sleepTransition = new SleepTransition(this);
+  }
+
   update(time, delta) {
     if (this.isGameOver) return;
 
-    this.player.update();
+    this.player.update(time, delta);
     this.humans.forEach(human => human.update(delta));
     this.police.forEach(cop => cop.update(delta));
     this.policeDispatcher.processQueue(time);
@@ -162,6 +193,16 @@ export class GameScene extends Phaser.Scene {
     // Update minimap
     if (this.minimap) {
       this.minimap.update();
+    }
+
+    // Update day/night system
+    if (this.dayNightSystem) {
+      this.dayNightSystem.update(delta);
+    }
+
+    // Update clock widget
+    if (this.clockWidget) {
+      this.clockWidget.update();
     }
   }
 
@@ -452,5 +493,72 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.hud.showGameOver(this.score);
+  }
+
+  // ==================== Sleep System ====================
+
+  /**
+   * Go to bed voluntarily (from bed interaction)
+   */
+  goToBed() {
+    if (this.isGameOver || this.isSleeping) return;
+
+    this.isSleeping = true;
+    this.player.disableControl();
+    this.dayNightSystem.pause();
+
+    // Move player to bed position
+    const bedPos = this.townGenerator.getPlayerBedPosition();
+    if (bedPos) {
+      this.player.sprite.setPosition(bedPos.x, bedPos.y);
+    }
+
+    // Show restful sleep transition
+    this.sleepTransition.showRestfulSleep(() => {
+      this.wakeUp();
+    });
+  }
+
+  /**
+   * Trigger fitful sleep (passed out at home but not in bed)
+   */
+  triggerFitfulSleep() {
+    if (this.isGameOver || this.isSleeping) return;
+
+    this.isSleeping = true;
+    this.player.disableControl();
+    this.dayNightSystem.pause();
+
+    // Show fitful sleep transition (player stays where they passed out)
+    this.sleepTransition.showFitfulSleep(() => {
+      this.wakeUp();
+    });
+  }
+
+  /**
+   * Trigger game over from passing out in the street
+   */
+  triggerPassOutGameOver() {
+    if (this.isGameOver) return;
+    this.isGameOver = true;
+
+    this.player.disableControl();
+
+    // Show pass out message
+    this.hud.showGameOver(this.score, 'You passed out in the street...\nYour secrets were uncovered.');
+  }
+
+  /**
+   * Wake up and start a new day
+   */
+  wakeUp() {
+    this.isSleeping = false;
+    this.dayNightSystem.startNewDay();
+    this.player.canControl = true;
+
+    // Show the new day notification
+    if (this.hud) {
+      this.hud.showNotification(`${this.dayNightSystem.getDateString()} - 9:00 AM`, 2000);
+    }
   }
 }
