@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { PLAYER, DEPTH } from '../config/constants.js';
+import { LineOfSight } from '../utils/LineOfSight.js';
 
 /**
  * Player entity with movement, attack, and corpse carrying abilities
@@ -16,6 +17,9 @@ export class Player {
 
     // Corpse carrying
     this.carriedCorpse = null;
+
+    // Prisoner carrying
+    this.carriedPrisoner = null;
 
     // Sleepy effect
     this.isSleepy = false;
@@ -76,6 +80,12 @@ export class Player {
         action: () => this.dropCorpse()
       },
       {
+        name: 'dropPrisoner',
+        priority: 45,
+        condition: () => this.carriedPrisoner !== null,
+        action: () => this.dropPrisoner()
+      },
+      {
         name: 'pickupCorpse',
         priority: 25,
         condition: () => this.canPickupCorpse(),
@@ -95,6 +105,10 @@ export class Player {
     // F key for Follow Me action
     this.fKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
     this.fKey.on('down', () => this.handleFAction());
+
+    // R key for Whisper action (on prisoners)
+    this.rKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    this.rKey.on('down', () => this.handleRAction());
   }
 
   handleSpaceAction() {
@@ -123,8 +137,15 @@ export class Player {
   handleFAction() {
     if (!this.canControl || this.scene.isGameOver) return;
 
-    // Check if ActionSystem has an F action to execute (Follow Me)
+    // Check if ActionSystem has an F action to execute (Follow Me, Imprison, Release)
     this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.F);
+  }
+
+  handleRAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // Check if ActionSystem has an R action to execute (Whisper)
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.R);
   }
 
   // ==================== Attack System ====================
@@ -137,6 +158,7 @@ export class Player {
     let nearestTarget = null;
     let nearestDistance = PLAYER.ATTACK_RANGE;
     let isTargetCop = false;
+    let isTargetPet = false;
 
     // Check humans
     for (const human of this.scene.humans) {
@@ -146,6 +168,7 @@ export class Player {
         nearestDistance = distance;
         nearestTarget = human;
         isTargetCop = false;
+        isTargetPet = false;
       }
     }
 
@@ -157,10 +180,25 @@ export class Player {
         nearestDistance = distance;
         nearestTarget = cop;
         isTargetCop = true;
+        isTargetPet = false;
       }
     }
 
-    return nearestTarget ? { target: nearestTarget, isCop: isTargetCop } : null;
+    // Check pets
+    if (this.scene.pets) {
+      for (const pet of this.scene.pets) {
+        if (!pet.isAlive) continue;
+        const distance = this.distanceTo(pet.sprite);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestTarget = pet;
+          isTargetCop = false;
+          isTargetPet = true;
+        }
+      }
+    }
+
+    return nearestTarget ? { target: nearestTarget, isCop: isTargetCop, isPet: isTargetPet } : null;
   }
 
   tryKill() {
@@ -180,17 +218,71 @@ export class Player {
     // Update HUD cooldown
     this.scene.hud?.triggerCooldown();
 
-    const { target, isCop } = result;
+    const { target, isCop, isPet } = result;
+
+    // Get kill location for witness check
+    const killX = target.sprite.x;
+    const killY = target.sprite.y;
 
     if (isCop) {
       target.takeDamage();
     } else {
       target.kill();
+    }
 
-      // Check target preference for scoring
-      if (target.hairColor === this.scene.targetHairColor &&
-          target.skinColor === this.scene.targetSkinColor) {
-        this.scene.addScore(1);
+    // Check for witnesses (humans who saw the kill)
+    // This applies to killing pets, kids, or any human
+    this.checkForKillWitnesses(killX, killY);
+  }
+
+  /**
+   * Check if any human witnessed a kill and identify player if so
+   */
+  checkForKillWitnesses(killX, killY) {
+    const witnessRange = 5 * 16; // 5 tiles
+
+    for (const human of this.scene.humans) {
+      if (!human.isAlive) continue;
+
+      const distance = Math.sqrt(
+        Math.pow(human.sprite.x - killX, 2) +
+        Math.pow(human.sprite.y - killY, 2)
+      );
+
+      if (distance < witnessRange) {
+        // Check line of sight from human to kill location
+        if (LineOfSight.hasLineOfSight(
+          human.sprite.x, human.sprite.y,
+          killX, killY,
+          this.scene.walls
+        )) {
+          // Human witnessed the kill - identify player and alert cops
+          this.scene.identifyPlayer(human.sprite);
+          this.scene.alertCopsToDisturbance(killX, killY);
+          return; // Only need one witness
+        }
+      }
+    }
+
+    // Also check if any cops witnessed
+    for (const cop of this.scene.police) {
+      if (!cop.isAlive) continue;
+
+      const distance = Math.sqrt(
+        Math.pow(cop.sprite.x - killX, 2) +
+        Math.pow(cop.sprite.y - killY, 2)
+      );
+
+      if (distance < witnessRange) {
+        if (LineOfSight.hasLineOfSight(
+          cop.sprite.x, cop.sprite.y,
+          killX, killY,
+          this.scene.walls
+        )) {
+          // Cop witnessed the kill
+          this.scene.identifyPlayer(cop.sprite);
+          return;
+        }
       }
     }
   }
@@ -258,6 +350,62 @@ export class Player {
     this.carriedCorpse.y = aboveHeadY;
   }
 
+  // ==================== Prisoner System ====================
+
+  pickupPrisoner(prisoner) {
+    if (this.carriedPrisoner || this.carriedCorpse) return;
+
+    this.carriedPrisoner = prisoner;
+    prisoner.isBeingCarried = true;
+    prisoner.sprite.setDepth(DEPTH.CARRIED_PRISONER);
+  }
+
+  dropPrisoner() {
+    if (!this.carriedPrisoner) return null;
+
+    const prisoner = this.carriedPrisoner;
+    this.carriedPrisoner = null;
+    prisoner.isBeingCarried = false;
+
+    // Check if near a cage - if so, don't release (cage will handle imprison)
+    const nearestCage = this.scene.getNearestEmptyCage?.(this.sprite.x, this.sprite.y, 30);
+    if (nearestCage) {
+      // Return prisoner so cage can imprison them
+      return prisoner;
+    }
+
+    // Not near cage - prisoner flees
+    prisoner.beReleased();
+    return null;
+  }
+
+  updateCarriedPrisoner() {
+    if (!this.carriedPrisoner) return;
+
+    const aboveHeadY = this.sprite.y - 12;
+    this.carriedPrisoner.sprite.setPosition(this.sprite.x, aboveHeadY);
+
+    // Periodic shiver while being carried
+    if (!this.prisonerShiverTimer) {
+      this.prisonerShiverTimer = this.scene.time.addEvent({
+        delay: 800,
+        callback: () => {
+          if (this.carriedPrisoner?.sprite?.active) {
+            this.carriedPrisoner.doShiverEffect();
+          }
+        },
+        loop: true
+      });
+    }
+  }
+
+  stopPrisonerShiverTimer() {
+    if (this.prisonerShiverTimer) {
+      this.prisonerShiverTimer.destroy();
+      this.prisonerShiverTimer = null;
+    }
+  }
+
   // ==================== Movement ====================
 
   update(time, delta) {
@@ -269,6 +417,7 @@ export class Player {
     const velocity = this.getInputVelocity();
     this.sprite.setVelocity(velocity.x, velocity.y);
     this.updateCarriedCorpse();
+    this.updateCarriedPrisoner();
     this.updateSleepyEffect(delta);
   }
 
@@ -304,6 +453,12 @@ export class Player {
 
     if (this.carriedCorpse) {
       this.dropCorpse();
+    }
+
+    if (this.carriedPrisoner) {
+      this.carriedPrisoner.beReleased();
+      this.carriedPrisoner = null;
+      this.stopPrisonerShiverTimer();
     }
   }
 

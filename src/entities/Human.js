@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { HUMAN, IDENTIFICATION, DEPTH, TRUST, MAP } from '../config/constants.js';
+import { HUMAN, IDENTIFICATION, DEPTH, TRUST, MAP, RACES, HUMAN_GENDERS, HUMAN_AGES, PRISONER } from '../config/constants.js';
 import { LineOfSight } from '../utils/LineOfSight.js';
 import { Pathfinding } from '../utils/Pathfinding.js';
 
@@ -10,19 +10,21 @@ const HumanState = {
   WANDERING: 'wandering',
   FLEEING: 'fleeing',
   FOLLOWING: 'following',
-  CONFUSED: 'confused'  // After stopping follow
+  CONFUSED: 'confused',  // After stopping follow
+  IMPRISONED: 'imprisoned'
 };
 
 /**
  * Human NPC entity with wandering behavior and corpse/crime detection
  */
 export class Human {
-  constructor(scene, x, y, hairColor, skinColor, homeBuilding = null) {
+  constructor(scene, x, y, race, gender, age, homeBuilding = null) {
     this.scene = scene;
     this.speed = HUMAN.SPEED;
     this.fleeSpeed = HUMAN.SPEED * 1.5; // Run faster when fleeing
-    this.hairColor = hairColor;
-    this.skinColor = skinColor;
+    this.race = race;       // { name, skin, hair }
+    this.gender = gender;   // 'male' or 'female'
+    this.age = age;         // 'adult' or 'child'
     this.isAlive = true;
     this.hasSeenCorpse = false;
     this.hasAlertedPolice = false;
@@ -58,16 +60,31 @@ export class Human {
     this.tilesFollowed = 0;
     this.followIcon = null;
 
+    // Imprisonment state
+    this.cage = null;
+    this.misery = 0;
+    this.miseryMeter = null;
+    this.isBeingCarried = false;
+    this.fleeingToReportPlayer = false;
+
     this.createSprite(x, y);
     this.initializeWandering();
   }
 
   createSprite(x, y) {
-    const textureKey = `human_${this.hairColor}_${this.skinColor}`;
+    const textureKey = `human_${this.race.name}_${this.gender}_${this.age}`;
     this.sprite = this.scene.physics.add.sprite(x, y, textureKey);
     this.sprite.setCollideWorldBounds(true);
-    this.sprite.body.setSize(12, 12);
-    this.sprite.body.setOffset(2, 4);
+
+    // Children are smaller
+    if (this.age === 'child') {
+      this.sprite.body.setSize(9, 9);
+      this.sprite.body.setOffset(1, 3);
+    } else {
+      this.sprite.body.setSize(12, 12);
+      this.sprite.body.setOffset(2, 4);
+    }
+
     this.sprite.parentEntity = this;
     this.sprite.setDepth(DEPTH.NPC);
 
@@ -113,6 +130,19 @@ export class Human {
         keyCode: Phaser.Input.Keyboard.KeyCodes.F,
         callback: () => this.startFollowing()
       });
+    }
+
+    // Add Imprison action if following and near an empty cage
+    if (this.state === HumanState.FOLLOWING) {
+      const nearestEmptyCage = this.scene.getNearestEmptyCage?.(this.sprite.x, this.sprite.y, 30);
+      if (nearestEmptyCage) {
+        actions.push({
+          name: 'Imprison',
+          key: 'F',
+          keyCode: Phaser.Input.Keyboard.KeyCodes.F,
+          callback: () => nearestEmptyCage.imprison(this)
+        });
+      }
     }
 
     return actions;
@@ -559,6 +589,20 @@ export class Human {
     // Update trust meter position
     this.updateTrustMeterPosition();
 
+    // Handle imprisoned state - no AI updates
+    if (this.state === HumanState.IMPRISONED) {
+      this.sprite.setVelocity(0, 0);
+      this.updateMiseryMeterPosition();
+      return;
+    }
+
+    // Handle being carried - just update position relative to player
+    if (this.isBeingCarried) {
+      this.sprite.setVelocity(0, 0);
+      this.updateMiseryMeterPosition();
+      return;
+    }
+
     // Handle following state separately
     if (this.state === HumanState.FOLLOWING) {
       this.updateFollowing();
@@ -569,6 +613,15 @@ export class Human {
     if (this.state === HumanState.CONFUSED) {
       this.sprite.setVelocity(0, 0);
       return;
+    }
+
+    // Check if fleeing to report player and reached home
+    if (this.fleeingToReportPlayer) {
+      const distToHome = LineOfSight.distance(this.sprite.x, this.sprite.y, this.spawnX, this.spawnY);
+      if (distToHome < 32) {
+        this.scene.triggerPrisonerEscapeGameOver?.();
+        return;
+      }
     }
 
     this.checkForCorpses();
@@ -866,6 +919,145 @@ export class Human {
     }
   }
 
+  // ==================== Imprisonment ====================
+
+  beImprisoned(cage) {
+    this.state = HumanState.IMPRISONED;
+    this.cage = cage;
+    this.sprite.setVelocity(0, 0);
+
+    // Hide follow icon and trust meter
+    this.hideFollowIcon();
+    if (this.trustMeter) {
+      this.trustMeter.setVisible(false);
+    }
+
+    // Unregister from ActionSystem (cage handles actions now)
+    if (this.scene.actionSystem) {
+      this.scene.actionSystem.unregisterObject(this.sprite);
+    }
+
+    // Create misery meter
+    this.createMiseryMeter();
+  }
+
+  beReleased() {
+    this.state = HumanState.FLEEING;
+    this.cage = null;
+    this.misery = 0;
+    this.isBeingCarried = false;
+    this.hideMiseryMeter();
+
+    // Re-register with ActionSystem
+    this.registerActions();
+
+    // Set target to home and flee
+    this.targetX = this.spawnX;
+    this.targetY = this.spawnY;
+    this.recalculatePath();
+
+    // Flag that we're fleeing to report player
+    this.fleeingToReportPlayer = true;
+  }
+
+  increaseMisery() {
+    if (this.misery >= PRISONER.MAX_MISERY) return;
+
+    this.misery++;
+    this.updateMiseryMeter();
+
+    // Visual feedback - quick shiver
+    this.doShiverEffect();
+
+    // At max misery, start death sequence
+    if (this.misery >= PRISONER.MAX_MISERY) {
+      this.startMiseryDeath();
+    }
+  }
+
+  startMiseryDeath() {
+    // Intense shivering for 5 seconds, then die
+    const shiverCount = Math.floor(PRISONER.SHIVER_DURATION / 200);
+    let shiversDone = 0;
+
+    const shiverInterval = this.scene.time.addEvent({
+      delay: 200,
+      callback: () => {
+        if (!this.isAlive) {
+          shiverInterval.destroy();
+          return;
+        }
+        this.doShiverEffect();
+        shiversDone++;
+        if (shiversDone >= shiverCount) {
+          shiverInterval.destroy();
+          // Notify cage and die
+          if (this.cage) {
+            this.cage.onPrisonerDeath();
+          }
+          this.kill();
+        }
+      },
+      loop: true
+    });
+  }
+
+  // ==================== Misery Meter UI ====================
+
+  createMiseryMeter() {
+    if (this.miseryMeter) return;
+
+    this.miseryMeter = this.scene.add.graphics();
+    this.miseryMeter.setDepth(DEPTH.HEALTH_BAR);
+    if (this.scene.hud) {
+      this.scene.hud.ignoreGameObject(this.miseryMeter);
+    }
+    this.drawMiseryMeter();
+  }
+
+  drawMiseryMeter() {
+    if (!this.miseryMeter) return;
+    this.miseryMeter.clear();
+
+    const x = this.sprite.x - 10;
+    const y = this.sprite.y - 18;
+    const width = 20;
+    const height = 3;
+    const fillWidth = (this.misery / PRISONER.MAX_MISERY) * width;
+
+    // Background
+    this.miseryMeter.fillStyle(0x333333, 0.8);
+    this.miseryMeter.fillRect(x, y, width, height);
+
+    // Fill - dark purple
+    const fillColor = 0x880088;
+    this.miseryMeter.fillStyle(fillColor, 1);
+    this.miseryMeter.fillRect(x, y, fillWidth, height);
+
+    // Border
+    this.miseryMeter.lineStyle(1, 0x000000, 0.8);
+    this.miseryMeter.strokeRect(x, y, width, height);
+  }
+
+  updateMiseryMeter() {
+    if (this.miseryMeter) {
+      this.drawMiseryMeter();
+    }
+  }
+
+  updateMiseryMeterPosition() {
+    if (this.miseryMeter && this.misery > 0) {
+      this.drawMiseryMeter();
+    }
+  }
+
+  hideMiseryMeter() {
+    if (this.miseryMeter) {
+      this.miseryMeter.destroy();
+      this.miseryMeter = null;
+    }
+  }
+
   // ==================== Death ====================
 
   kill() {
@@ -886,6 +1078,9 @@ export class Human {
     // Clean up follow icon
     this.hideFollowIcon();
 
+    // Clean up misery meter
+    this.hideMiseryMeter();
+
     this.sprite.setTint(0xffff00);
 
     const deathX = this.sprite.x;
@@ -893,8 +1088,8 @@ export class Human {
 
     this.scene.spawnBloodSplatter(deathX, deathY);
 
-    const corpseTextureKey = `corpse_${this.hairColor}_${this.skinColor}`;
-    this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, false, this.hairColor, this.skinColor);
+    const corpseTextureKey = `corpse_${this.race.name}_${this.gender}_${this.age}`;
+    this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, false, this.race, this.gender, this.age);
 
     this.scene.time.delayedCall(100, () => {
       if (this.sprite?.active) {

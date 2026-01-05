@@ -183,24 +183,11 @@ export class RitualSystem {
       return;
     }
 
-    // Check if preferred target
-    const isPreferred = corpse.hairColor === this.scene.targetHairColor &&
-                        corpse.skinColor === this.scene.targetSkinColor;
-
-    const points = isPreferred ? RITUAL.SACRIFICE_POINTS_PREFERRED : RITUAL.SACRIFICE_POINTS_OTHER;
-
     // Destroy corpse
     corpseManager.destroy(corpse);
 
-    // Add points
-    this.scene.addScore(points);
-
     // Show notification
-    if (isPreferred) {
-      this.scene.hud?.showNotification('DARK SACRIFICE!\n+5 points', 2000);
-    } else {
-      this.scene.hud?.showNotification('Dark sacrifice...\n+1 point', 2000);
-    }
+    this.scene.hud?.showNotification('The voices are pleased...', 2000);
   }
 
   /**

@@ -1,4 +1,4 @@
-import { HAIR_COLORS, SKIN_COLORS, NEIGHBORHOODS, HOUSE_TYPES } from '../config/constants.js';
+import { NEIGHBORHOODS, HOUSE_TYPES, RACES, HUMAN_GENDERS, HUMAN_AGES, PET_TYPES } from '../config/constants.js';
 
 /**
  * Factory class for generating all game textures programmatically
@@ -50,6 +50,9 @@ export class TextureFactory {
     this.createTrash();
     // Effects
     this.createZzzIcon();
+    // Pets
+    this.createAllPets();
+    this.createAllPetCorpses();
   }
 
   /**
@@ -95,22 +98,57 @@ export class TextureFactory {
   }
 
   /**
-   * Police officer texture
+   * Police officer textures - create all race/gender variants (adults only)
    */
   createPolice() {
+    for (const race of RACES) {
+      for (const gender of HUMAN_GENDERS) {
+        this.createPoliceVariant(race, gender);
+      }
+    }
+    // Also create default 'police' texture for backwards compatibility
+    this.createPoliceVariant(RACES[0], 'male', 'police');
+  }
+
+  /**
+   * Single police officer texture variant
+   */
+  createPoliceVariant(race, gender, keyOverride = null) {
+    const key = keyOverride || `police_${race.name}_${gender}`;
+    if (this.scene.textures.exists(key)) return;
+
     const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-    g.fillStyle(0x1a237e);  // dark blue cap
+    const isFemale = gender === 'female';
+
+    // Dark blue cap
+    g.fillStyle(0x1a237e);
     g.fillRect(1, 0, 14, 4);
-    g.fillStyle(0xFFDBC4);  // face
+
+    // Hair showing under cap for females
+    if (isFemale) {
+      g.fillStyle(race.hair);
+      g.fillRect(1, 3, 3, 5); // left side hair
+      g.fillRect(12, 3, 3, 5); // right side hair
+    }
+
+    // Face with race-specific skin color
+    g.fillStyle(race.skin);
     g.fillRect(4, 2, 8, 3);
-    g.fillStyle(0x283593);  // uniform body
+
+    // Uniform body
+    g.fillStyle(0x283593);
     g.fillRect(2, 5, 12, 7);
-    g.fillStyle(0xffd700);  // gold badge
+
+    // Gold badge
+    g.fillStyle(0xffd700);
     g.fillRect(5, 6, 3, 3);
-    g.fillStyle(0x1a237e);  // legs
+
+    // Legs
+    g.fillStyle(0x1a237e);
     g.fillRect(4, 12, 3, 4);
     g.fillRect(9, 12, 3, 4);
-    g.generateTexture('police', 16, 16);
+
+    g.generateTexture(key, 16, 16);
   }
 
   /**
@@ -128,9 +166,10 @@ export class TextureFactory {
   }
 
   /**
-   * Cage texture for game over
+   * Cage textures for game over and imprisonment
    */
   createCage() {
+    // Original small cage for game over
     const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
     g.lineStyle(2, 0x333333);
     for (let i = 2; i < 16; i += 4) {
@@ -139,6 +178,51 @@ export class TextureFactory {
     g.lineBetween(0, 2, 16, 2);
     g.lineBetween(0, 14, 16, 14);
     g.generateTexture('cage', 16, 16);
+
+    // Larger cage for basement imprisonment (24x24)
+    this.createCageEmpty();
+  }
+
+  /**
+   * Empty cage for basement (24x24)
+   */
+  createCageEmpty() {
+    const key = 'cage_empty';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Base/floor (dark stone)
+    g.fillStyle(0x2a2a2a);
+    g.fillRect(0, 20, 24, 4);
+
+    // Vertical bars (iron gray)
+    g.lineStyle(2, 0x444444);
+    for (let i = 3; i < 24; i += 5) {
+      g.lineBetween(i, 2, i, 20);
+    }
+
+    // Top bar
+    g.lineStyle(2, 0x555555);
+    g.lineBetween(0, 2, 24, 2);
+
+    // Bottom horizontal bar
+    g.lineBetween(0, 18, 24, 18);
+
+    // Highlight on bars (lighter reflection)
+    g.lineStyle(1, 0x666666);
+    for (let i = 4; i < 24; i += 5) {
+      g.lineBetween(i, 3, i, 17);
+    }
+
+    // Corner brackets
+    g.fillStyle(0x555555);
+    g.fillRect(0, 0, 4, 4);
+    g.fillRect(20, 0, 4, 4);
+    g.fillRect(0, 18, 4, 4);
+    g.fillRect(20, 18, 4, 4);
+
+    g.generateTexture(key, 24, 24);
   }
 
   /**
@@ -219,43 +303,72 @@ export class TextureFactory {
   }
 
   /**
-   * Generate human textures for all color combinations
+   * Generate human textures for all race/gender/age combinations
    */
   createAllHumans() {
-    for (const hairColor of Object.values(HAIR_COLORS)) {
-      for (const skinColor of Object.values(SKIN_COLORS)) {
-        this.createHuman(hairColor, skinColor);
+    // Create textures for each race/gender/age combination
+    for (const race of RACES) {
+      for (const gender of HUMAN_GENDERS) {
+        for (const age of HUMAN_AGES) {
+          this.createHumanVariant(race, gender, age);
+        }
       }
     }
   }
 
   /**
-   * Single human texture
+   * Single human texture with race/gender/age variants
    */
-  createHuman(hairColor, skinColor) {
-    const key = `human_${hairColor}_${skinColor}`;
+  createHumanVariant(race, gender, age) {
+    const key = `human_${race.name}_${gender}_${age}`;
     if (this.scene.textures.exists(key)) return;
 
     const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-    g.fillStyle(hairColor);
-    g.fillRect(2, 0, 12, 4);
-    g.fillStyle(skinColor);
-    g.fillRect(4, 2, 8, 3);
-    g.fillStyle(0x666666);
-    g.fillRect(2, 5, 12, 7);
+    const isChild = age === 'child';
+    const isFemale = gender === 'female';
+
+    // Size adjustments for children (smaller sprite)
+    const size = isChild ? 12 : 16;
+    const scale = isChild ? 0.75 : 1;
+
+    // Hair - females have longer hair
+    g.fillStyle(race.hair);
+    if (isFemale) {
+      // Long hair extends down sides
+      g.fillRect(Math.floor(2 * scale), 0, Math.floor(12 * scale), Math.floor(4 * scale));
+      g.fillRect(Math.floor(1 * scale), Math.floor(2 * scale), Math.floor(3 * scale), Math.floor(6 * scale)); // left side
+      g.fillRect(Math.floor(12 * scale), Math.floor(2 * scale), Math.floor(3 * scale), Math.floor(6 * scale)); // right side
+    } else {
+      // Short hair
+      g.fillRect(Math.floor(2 * scale), 0, Math.floor(12 * scale), Math.floor(4 * scale));
+    }
+
+    // Face
+    g.fillStyle(race.skin);
+    g.fillRect(Math.floor(4 * scale), Math.floor(2 * scale), Math.floor(8 * scale), Math.floor(3 * scale));
+
+    // Body - slightly different clothing color based on gender
+    const bodyColor = isFemale ? 0x555577 : 0x666666;
+    g.fillStyle(bodyColor);
+    g.fillRect(Math.floor(2 * scale), Math.floor(5 * scale), Math.floor(12 * scale), Math.floor(7 * scale));
+
+    // Legs
     g.fillStyle(0x444444);
-    g.fillRect(4, 12, 3, 4);
-    g.fillRect(9, 12, 3, 4);
-    g.generateTexture(key, 16, 16);
+    g.fillRect(Math.floor(4 * scale), Math.floor(12 * scale), Math.floor(3 * scale), Math.floor(4 * scale));
+    g.fillRect(Math.floor(9 * scale), Math.floor(12 * scale), Math.floor(3 * scale), Math.floor(4 * scale));
+
+    g.generateTexture(key, size, size);
   }
 
   /**
-   * Generate corpse textures for all color combinations
+   * Generate corpse textures for all race/gender/age combinations
    */
   createAllCorpses() {
-    for (const hairColor of Object.values(HAIR_COLORS)) {
-      for (const skinColor of Object.values(SKIN_COLORS)) {
-        this.createCorpse(hairColor, skinColor);
+    for (const race of RACES) {
+      for (const gender of HUMAN_GENDERS) {
+        for (const age of HUMAN_AGES) {
+          this.createCorpseVariant(race, gender, age);
+        }
       }
     }
   }
@@ -276,55 +389,110 @@ export class TextureFactory {
   /**
    * Draw X eyes on a corpse
    */
-  drawXEyes(g) {
+  drawXEyes(g, scale = 1) {
     g.lineStyle(1, 0x000000);
-    g.lineBetween(5, 2, 7, 4);
-    g.lineBetween(5, 4, 7, 2);
-    g.lineBetween(9, 2, 11, 4);
-    g.lineBetween(9, 4, 11, 2);
+    g.lineBetween(Math.floor(5 * scale), Math.floor(2 * scale), Math.floor(7 * scale), Math.floor(4 * scale));
+    g.lineBetween(Math.floor(5 * scale), Math.floor(4 * scale), Math.floor(7 * scale), Math.floor(2 * scale));
+    g.lineBetween(Math.floor(9 * scale), Math.floor(2 * scale), Math.floor(11 * scale), Math.floor(4 * scale));
+    g.lineBetween(Math.floor(9 * scale), Math.floor(4 * scale), Math.floor(11 * scale), Math.floor(2 * scale));
   }
 
   /**
-   * Single corpse texture
+   * Single corpse texture with race/gender/age variants
    */
-  createCorpse(hairColor, skinColor) {
-    const key = `corpse_${hairColor}_${skinColor}`;
+  createCorpseVariant(race, gender, age) {
+    const key = `corpse_${race.name}_${gender}_${age}`;
     if (this.scene.textures.exists(key)) return;
 
     const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-    g.fillStyle(this.tintColor(hairColor));
-    g.fillRect(2, 0, 12, 4);
-    g.fillStyle(this.tintColor(skinColor));
-    g.fillRect(4, 2, 8, 3);
-    this.drawXEyes(g);
-    g.fillStyle(this.tintColor(0x666666));
-    g.fillRect(2, 5, 12, 7);
+    const isChild = age === 'child';
+    const isFemale = gender === 'female';
+
+    const size = isChild ? 12 : 16;
+    const scale = isChild ? 0.75 : 1;
+
+    // Hair - females have longer hair
+    g.fillStyle(this.tintColor(race.hair));
+    if (isFemale) {
+      g.fillRect(Math.floor(2 * scale), 0, Math.floor(12 * scale), Math.floor(4 * scale));
+      g.fillRect(Math.floor(1 * scale), Math.floor(2 * scale), Math.floor(3 * scale), Math.floor(6 * scale));
+      g.fillRect(Math.floor(12 * scale), Math.floor(2 * scale), Math.floor(3 * scale), Math.floor(6 * scale));
+    } else {
+      g.fillRect(Math.floor(2 * scale), 0, Math.floor(12 * scale), Math.floor(4 * scale));
+    }
+
+    // Face
+    g.fillStyle(this.tintColor(race.skin));
+    g.fillRect(Math.floor(4 * scale), Math.floor(2 * scale), Math.floor(8 * scale), Math.floor(3 * scale));
+
+    // X eyes
+    this.drawXEyes(g, scale);
+
+    // Body
+    const bodyColor = isFemale ? 0x555577 : 0x666666;
+    g.fillStyle(this.tintColor(bodyColor));
+    g.fillRect(Math.floor(2 * scale), Math.floor(5 * scale), Math.floor(12 * scale), Math.floor(7 * scale));
+
+    // Legs
     g.fillStyle(this.tintColor(0x444444));
-    g.fillRect(4, 12, 3, 4);
-    g.fillRect(9, 12, 3, 4);
-    g.generateTexture(key, 16, 16);
+    g.fillRect(Math.floor(4 * scale), Math.floor(12 * scale), Math.floor(3 * scale), Math.floor(4 * scale));
+    g.fillRect(Math.floor(9 * scale), Math.floor(12 * scale), Math.floor(3 * scale), Math.floor(4 * scale));
+
+    g.generateTexture(key, size, size);
   }
 
   /**
-   * Police corpse texture
+   * Police corpse textures - create all race/gender variants
    */
   createPoliceCorpse() {
-    const key = 'corpse_police';
+    for (const race of RACES) {
+      for (const gender of HUMAN_GENDERS) {
+        this.createPoliceCorpseVariant(race, gender);
+      }
+    }
+    // Default for backwards compatibility
+    this.createPoliceCorpseVariant(RACES[0], 'male', 'corpse_police');
+  }
+
+  /**
+   * Single police corpse texture variant
+   */
+  createPoliceCorpseVariant(race, gender, keyOverride = null) {
+    const key = keyOverride || `corpse_police_${race.name}_${gender}`;
     if (this.scene.textures.exists(key)) return;
 
     const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    const isFemale = gender === 'female';
+
+    // Dark blue cap
     g.fillStyle(this.tintColor(0x1a237e));
     g.fillRect(1, 0, 14, 4);
-    g.fillStyle(this.tintColor(0xFFDBC4));
+
+    // Hair showing under cap for females
+    if (isFemale) {
+      g.fillStyle(this.tintColor(race.hair));
+      g.fillRect(1, 3, 3, 5);
+      g.fillRect(12, 3, 3, 5);
+    }
+
+    // Face with race-specific skin color
+    g.fillStyle(this.tintColor(race.skin));
     g.fillRect(4, 2, 8, 3);
     this.drawXEyes(g);
+
+    // Uniform body
     g.fillStyle(this.tintColor(0x283593));
     g.fillRect(2, 5, 12, 7);
+
+    // Gold badge
     g.fillStyle(this.tintColor(0xffd700));
     g.fillRect(5, 6, 3, 3);
+
+    // Legs
     g.fillStyle(this.tintColor(0x1a237e));
     g.fillRect(4, 12, 3, 4);
     g.fillRect(9, 12, 3, 4);
+
     g.generateTexture(key, 16, 16);
   }
 
@@ -1141,5 +1309,239 @@ export class TextureFactory {
     g.fillRect(1, 15, 6, 1);
 
     g.generateTexture(key, 16, 16);
+  }
+
+  // ==================== Pet Textures ====================
+
+  /**
+   * Create all pet textures (dogs and cats)
+   */
+  createAllPets() {
+    for (const [petType, config] of Object.entries(PET_TYPES)) {
+      for (const colorVariant of config.colors) {
+        this.createPetTexture(petType, colorVariant);
+      }
+    }
+  }
+
+  /**
+   * Create a single pet texture
+   */
+  createPetTexture(petType, colorVariant) {
+    const key = `${petType}_${colorVariant.name}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    if (petType === 'dog') {
+      this.drawDog(g, colorVariant.body, colorVariant.spot);
+      g.generateTexture(key, 14, 14);
+    } else if (petType === 'cat') {
+      this.drawCat(g, colorVariant.body, colorVariant.spot);
+      g.generateTexture(key, 12, 12);
+    }
+  }
+
+  /**
+   * Draw a dog sprite (14x14)
+   */
+  drawDog(g, bodyColor, spotColor) {
+    // Body (larger, more dog-like)
+    g.fillStyle(bodyColor);
+    g.fillRect(1, 5, 10, 5);
+
+    // Head (bigger, rounder)
+    g.fillRect(9, 2, 5, 5);
+
+    // Floppy ears
+    g.fillStyle(spotColor);
+    g.fillRect(9, 1, 2, 3);
+    g.fillRect(12, 1, 2, 3);
+
+    // Snout (longer)
+    g.fillStyle(bodyColor);
+    g.fillRect(11, 4, 3, 3);
+
+    // Nose
+    g.fillStyle(0x1a1a1a);
+    g.fillRect(13, 5, 1, 1);
+
+    // Eye
+    g.fillStyle(0x000000);
+    g.fillRect(10, 3, 1, 1);
+
+    // Front legs
+    g.fillStyle(bodyColor);
+    g.fillRect(8, 10, 2, 4);
+
+    // Back legs
+    g.fillRect(2, 10, 2, 4);
+
+    // Tail (wagging up)
+    g.fillRect(0, 3, 2, 3);
+    g.fillRect(0, 2, 1, 2);
+
+    // Spot on body
+    g.fillStyle(spotColor);
+    g.fillRect(4, 6, 3, 3);
+
+    // Collar
+    g.fillStyle(0xff0000);
+    g.fillRect(9, 6, 3, 1);
+  }
+
+  /**
+   * Draw a cat sprite (12x12)
+   */
+  drawCat(g, bodyColor, spotColor) {
+    // Body (slender)
+    g.fillStyle(bodyColor);
+    g.fillRect(2, 5, 7, 4);
+
+    // Head (rounder than dog)
+    g.fillRect(7, 2, 4, 4);
+
+    // Ears (pointy)
+    g.fillStyle(spotColor);
+    g.fillRect(7, 1, 2, 2);
+    g.fillRect(10, 1, 2, 2);
+
+    // Inner ear
+    g.fillStyle(0xffaaaa);
+    g.fillRect(8, 1, 1, 1);
+    g.fillRect(10, 1, 1, 1);
+
+    // Eyes
+    g.fillStyle(0x44aa44); // Green cat eyes
+    g.fillRect(8, 3, 1, 1);
+    g.fillRect(10, 3, 1, 1);
+
+    // Nose
+    g.fillStyle(0xffaaaa);
+    g.fillRect(9, 4, 1, 1);
+
+    // Legs (slender)
+    g.fillStyle(bodyColor);
+    g.fillRect(3, 9, 1, 3);
+    g.fillRect(5, 9, 1, 3);
+    g.fillRect(7, 9, 1, 3);
+
+    // Tail (long and curved)
+    g.fillRect(0, 4, 3, 1);
+    g.fillRect(0, 3, 1, 2);
+
+    // Stripes/spots
+    g.fillStyle(spotColor);
+    g.fillRect(4, 6, 2, 1);
+    g.fillRect(3, 7, 1, 1);
+  }
+
+  /**
+   * Create all pet corpse textures
+   */
+  createAllPetCorpses() {
+    for (const [petType, config] of Object.entries(PET_TYPES)) {
+      for (const colorVariant of config.colors) {
+        this.createPetCorpseTexture(petType, colorVariant);
+      }
+    }
+  }
+
+  /**
+   * Create a single pet corpse texture
+   */
+  createPetCorpseTexture(petType, colorVariant) {
+    const key = `corpse_${petType}_${colorVariant.name}`;
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    const tintedBody = this.tintColor(colorVariant.body);
+    const tintedSpot = this.tintColor(colorVariant.spot);
+
+    if (petType === 'dog') {
+      this.drawDeadDog(g, tintedBody, tintedSpot);
+      g.generateTexture(key, 14, 14);
+    } else if (petType === 'cat') {
+      this.drawDeadCat(g, tintedBody, tintedSpot);
+      g.generateTexture(key, 12, 12);
+    }
+  }
+
+  /**
+   * Draw a dead dog sprite (14x14)
+   */
+  drawDeadDog(g, bodyColor, spotColor) {
+    // Body on its side (larger)
+    g.fillStyle(bodyColor);
+    g.fillRect(1, 5, 10, 5);
+
+    // Head on ground
+    g.fillRect(9, 4, 5, 5);
+
+    // Ears flopped
+    g.fillStyle(spotColor);
+    g.fillRect(11, 3, 2, 2);
+    g.fillRect(9, 3, 2, 2);
+
+    // X eyes
+    g.lineStyle(1, 0x000000);
+    g.lineBetween(10, 5, 11, 6);
+    g.lineBetween(10, 6, 11, 5);
+
+    // Legs sprawled
+    g.fillStyle(bodyColor);
+    g.fillRect(2, 10, 2, 3);
+    g.fillRect(6, 10, 2, 3);
+    g.fillRect(2, 3, 2, 2);
+
+    // Tail limp
+    g.fillRect(0, 6, 2, 1);
+
+    // Spot on body
+    g.fillStyle(spotColor);
+    g.fillRect(4, 6, 3, 3);
+
+    // Collar
+    g.fillStyle(this.tintColor(0xff0000));
+    g.fillRect(9, 7, 3, 1);
+  }
+
+  /**
+   * Draw a dead cat sprite (12x12)
+   */
+  drawDeadCat(g, bodyColor, spotColor) {
+    // Body on its side
+    g.fillStyle(bodyColor);
+    g.fillRect(1, 5, 8, 3);
+
+    // Head on ground
+    g.fillRect(7, 3, 4, 4);
+
+    // Ears flopped
+    g.fillStyle(spotColor);
+    g.fillRect(7, 2, 2, 2);
+    g.fillRect(10, 2, 2, 2);
+
+    // X eyes
+    g.lineStyle(1, 0x000000);
+    g.lineBetween(8, 4, 9, 5);
+    g.lineBetween(8, 5, 9, 4);
+    g.lineBetween(10, 4, 11, 5);
+    g.lineBetween(10, 5, 11, 4);
+
+    // Legs sprawled
+    g.fillStyle(bodyColor);
+    g.fillRect(2, 8, 1, 2);
+    g.fillRect(4, 8, 1, 2);
+    g.fillRect(6, 8, 1, 2);
+    g.fillRect(2, 3, 1, 2);
+
+    // Tail limp
+    g.fillRect(0, 5, 2, 1);
+    g.fillRect(0, 6, 1, 1);
+
+    // Stripes/spots
+    g.fillStyle(spotColor);
+    g.fillRect(3, 6, 2, 1);
   }
 }

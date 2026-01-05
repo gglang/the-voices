@@ -207,12 +207,17 @@ export class Door {
   findNearbyHuman() {
     const range = 5 * 16; // 5 tiles
 
+    // Collect all eligible humans (in building or nearby)
+    const eligibleHumans = [];
+
     for (const human of this.scene.humans) {
       if (!human.isAlive) continue;
+      if (human.state === 'fleeing') continue;
 
       // Check if in same building
       if (human.homeBuilding?.id === this.buildingId) {
-        return human;
+        eligibleHumans.push(human);
+        continue;
       }
 
       // Check if within range
@@ -221,8 +226,13 @@ export class Door {
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       if (distance < range) {
-        return human;
+        eligibleHumans.push(human);
       }
+    }
+
+    // Return a random eligible human (so kids can answer too)
+    if (eligibleHumans.length > 0) {
+      return eligibleHumans[Math.floor(Math.random() * eligibleHumans.length)];
     }
 
     return null;

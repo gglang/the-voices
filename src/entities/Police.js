@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { POLICE, DEPTH } from '../config/constants.js';
+import { POLICE, DEPTH, RACES, HUMAN_GENDERS } from '../config/constants.js';
 import { LineOfSight } from '../utils/LineOfSight.js';
 import { Pathfinding } from '../utils/Pathfinding.js';
 
@@ -17,9 +17,13 @@ const CopState = {
  * Police entity with patrol, investigation, and arrest behaviors
  */
 export class Police {
-  constructor(scene, x, y) {
+  constructor(scene, x, y, race = null, gender = null) {
     this.scene = scene;
     this.isAlive = true;
+
+    // Assign random race/gender if not provided
+    this.race = race || RACES[Phaser.Math.Between(0, RACES.length - 1)];
+    this.gender = gender || HUMAN_GENDERS[Phaser.Math.Between(0, HUMAN_GENDERS.length - 1)];
 
     // Movement
     this.baseSpeed = POLICE.BASE_SPEED;
@@ -62,7 +66,8 @@ export class Police {
   }
 
   createSprite(x, y) {
-    this.sprite = this.scene.physics.add.sprite(x, y, 'police');
+    const textureKey = `police_${this.race.name}_${this.gender}`;
+    this.sprite = this.scene.physics.add.sprite(x, y, textureKey);
     this.sprite.setCollideWorldBounds(true);
     this.sprite.body.setSize(12, 12);
     this.sprite.body.setOffset(2, 4);
@@ -699,7 +704,8 @@ export class Police {
     const deathY = this.sprite.y;
 
     this.scene.spawnBloodSplatter(deathX, deathY);
-    this.corpseData = this.scene.spawnCorpse(deathX, deathY, 'corpse_police', true);
+    const corpseTextureKey = `corpse_police_${this.race.name}_${this.gender}`;
+    this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, true);
 
     if (this.healthBar) {
       this.healthBar.destroy();

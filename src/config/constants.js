@@ -74,22 +74,71 @@ export const RITUAL = {
   SACRIFICE_POINTS_OTHER: 1
 };
 
-// Color palettes
-export const HAIR_COLORS = {
-  black: 0x1a1a1a,
-  brown: 0x8B4513,
-  blonde: 0xF4D03F,
-  red: 0xC0392B,
-  blue: 0x3498DB,
-  white: 0xECECEC
+// Race definitions (skin + hair color pairs)
+export const RACES = [
+  { name: 'azure', skin: 0x4488cc, hair: 0x22aaaa },   // Blue skin, teal hair
+  { name: 'crimson', skin: 0xcc4444, hair: 0x44aa44 }, // Red skin, green hair
+  { name: 'golden', skin: 0xddcc44, hair: 0xdd8844 }   // Yellow skin, orange hair
+];
+
+// Human variants
+export const HUMAN_GENDERS = ['male', 'female'];
+export const HUMAN_AGES = ['adult', 'child'];
+
+// Pet settings
+export const PET = {
+  SPEED: 60,
+  FLEE_SPEED: 90,
+  WANDER_RADIUS: 3 * 16,    // pixels - smaller wander area than humans
+  WAIT_TIME_MIN: 500,
+  WAIT_TIME_MAX: 2000
 };
 
-export const SKIN_COLORS = {
-  light: 0xFFDBC4,
-  tan: 0xE5B887,
-  medium: 0xC68642,
-  brown: 0x8D5524,
-  dark: 0x5C3A21
+// Pet types with colors
+export const PET_TYPES = {
+  dog: {
+    name: 'dog',
+    colors: [
+      { name: 'brown', body: 0x8B4513, spot: 0x5C3317 },
+      { name: 'golden', body: 0xDAA520, spot: 0xB8860B },
+      { name: 'black', body: 0x2a2a2a, spot: 0x1a1a1a },
+      { name: 'white', body: 0xe8e8e8, spot: 0xcccccc }
+    ]
+  },
+  cat: {
+    name: 'cat',
+    colors: [
+      { name: 'orange', body: 0xE07020, spot: 0xC05010 },
+      { name: 'gray', body: 0x808080, spot: 0x606060 },
+      { name: 'black', body: 0x2a2a2a, spot: 0x1a1a1a },
+      { name: 'white', body: 0xe8e8e8, spot: 0xcccccc }
+    ]
+  }
+};
+
+// Household pet distribution
+export const HOUSEHOLD_PETS = {
+  PETLESS_CHANCE: 0.50,       // 50% of homes have no pets
+  SINGLE_PET_CHANCE: 0.30,    // 30% have exactly one pet
+  // Remaining 20% have multiple pets
+  MAX_DOGS: 2,
+  MAX_CATS: 2
+};
+
+// Prisoner settings
+export const PRISONER = {
+  MAX_MISERY: 3,
+  SHIVER_DURATION: 5000,    // 5 seconds of shivering at max misery before death
+  FLEE_SPEED: 100,          // Speed when released and fleeing
+  SHIVER_INTERVAL: 800,     // ms between shivers when imprisoned
+  PICKUP_RANGE: 24          // pixels
+};
+
+// Cage settings
+export const CAGE = {
+  SIZE: 24,                 // 24x24 pixel cage
+  COUNT: 3,                 // Number of cages in basement
+  SPACING: 32               // pixels between cage centers
 };
 
 // Visual effects
@@ -115,6 +164,7 @@ export const DEPTH = {
   EFFECTS: 50,
   ROOF: 80,
   CARRIED_CORPSE: 100,
+  CARRIED_PRISONER: 100,
   CAGE: 100,
   EXCLAMATION: 150
 };
@@ -183,8 +233,8 @@ export const HOUSE_TYPES = {
   mansion: { width: 10, height: 8, wall: 0xd4a574, roof: 0x2a2a4a, floor: 0xc49564 },
   colonial: { width: 8, height: 7, wall: 0xf5f5f5, roof: 0x1a1a2a, floor: 0xb08060 },
   modern: { width: 9, height: 7, wall: 0xc0c0c0, roof: 0x3a3a3a, floor: 0xa09080 },
-  // Player home (medium neighborhood with basement)
-  player_home: { width: 7, height: 7, wall: 0x8B4513, roof: 0x5B0000, floor: 0xA0522D, hasBasement: true }
+  // Player home (medium neighborhood with basement - larger for cage room)
+  player_home: { width: 10, height: 10, wall: 0x8B4513, roof: 0x5B0000, floor: 0xA0522D, hasBasement: true }
 };
 
 // Minimap settings

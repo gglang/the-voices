@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { Player } from '../entities/Player.js';
 import { Human } from '../entities/Human.js';
 import { Police } from '../entities/Police.js';
+import { Pet } from '../entities/Pet.js';
+import { Cage } from '../entities/Cage.js';
 import { HUD } from '../ui/HUD.js';
 import { Minimap } from '../ui/Minimap.js';
 import { ActionPopup } from '../ui/ActionPopup.js';
@@ -15,9 +17,13 @@ import { PoliceDispatcher } from '../systems/PoliceDispatcher.js';
 import { TownGenerator } from '../systems/TownGenerator.js';
 import { ActionSystem } from '../systems/ActionSystem.js';
 import { DayNightSystem } from '../systems/DayNightSystem.js';
+import { ObjectiveSystem } from '../systems/ObjectiveSystem.js';
+import { ObjectivesWidget } from '../ui/ObjectivesWidget.js';
+import { ObjectivePopup } from '../ui/ObjectivePopup.js';
 import {
   MAP, DEPTH, TOWN,
-  HAIR_COLORS, SKIN_COLORS
+  RACES, HUMAN_GENDERS,
+  PET_TYPES, HOUSEHOLD_PETS
 } from '../config/constants.js';
 
 export class GameScene extends Phaser.Scene {
@@ -41,23 +47,21 @@ export class GameScene extends Phaser.Scene {
     this.createHUD();
     this.createMinimap();
     this.createDayNightSystem();
+    this.createObjectivesSystem();
+    this.createPauseMenu();
   }
 
   /**
    * Initialize core game state
    */
   initializeGameState() {
-    this.score = 0;
     this.isGameOver = false;
     this.isSleeping = false;
+    this.isPaused = false;
     this.humans = [];
     this.police = [];
-
-    // Randomize target preference
-    const hairKeys = Object.keys(HAIR_COLORS);
-    const skinKeys = Object.keys(SKIN_COLORS);
-    this.targetHairColor = HAIR_COLORS[hairKeys[Phaser.Math.Between(0, hairKeys.length - 1)]];
-    this.targetSkinColor = SKIN_COLORS[skinKeys[Phaser.Math.Between(0, skinKeys.length - 1)]];
+    this.pets = [];
+    this.cages = [];
   }
 
   /**
@@ -122,7 +126,9 @@ export class GameScene extends Phaser.Scene {
    */
   spawnEntities() {
     this.spawnHumans();
+    this.spawnPets();
     this.spawnPolice();
+    this.spawnCages();
 
     // Register player home's basement ritual site with the ritual system
     const playerHome = this.townGenerator.getPlayerHome();
@@ -139,8 +145,6 @@ export class GameScene extends Phaser.Scene {
    */
   createHUD() {
     this.hud = new HUD(this);
-    this.hud.setTargetPreference(this.targetHairColor, this.targetSkinColor);
-    this.hud.setScore(0);
 
     // Create action popup for object interactions
     this.actionPopup = new ActionPopup(this);
@@ -166,11 +170,127 @@ export class GameScene extends Phaser.Scene {
     this.sleepTransition = new SleepTransition(this);
   }
 
+  /**
+   * Create objectives system and UI
+   */
+  createObjectivesSystem() {
+    // Create popup first (widget needs reference to it)
+    this.objectivePopup = new ObjectivePopup(this);
+
+    // Create objectives widget
+    this.objectivesWidget = new ObjectivesWidget(this);
+    this.objectivesWidget.registerWithHUD(this.hud);
+
+    // Create objectives system
+    this.objectiveSystem = new ObjectiveSystem(this);
+
+    // Add initial daily objective
+    this.objectiveSystem.addDailyObjective();
+  }
+
+  /**
+   * Create pause menu overlay
+   */
+  createPauseMenu() {
+    const width = this.scale.width;
+    const height = this.scale.height;
+
+    // Semi-transparent background
+    this.pauseOverlay = this.add.graphics();
+    this.pauseOverlay.setScrollFactor(0);
+    this.pauseOverlay.setDepth(3000);
+    this.pauseOverlay.fillStyle(0x000000, 0.7);
+    this.pauseOverlay.fillRect(0, 0, width, height);
+    this.pauseOverlay.setVisible(false);
+
+    // PAUSED text
+    this.pauseText = this.add.text(width / 2, height / 2 - 20, 'PAUSED', {
+      fontSize: '32px',
+      fontFamily: 'monospace',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    });
+    this.pauseText.setOrigin(0.5);
+    this.pauseText.setScrollFactor(0);
+    this.pauseText.setDepth(3001);
+    this.pauseText.setVisible(false);
+
+    // Resume hint
+    this.pauseHint = this.add.text(width / 2, height / 2 + 20, 'Press ESC to resume', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#aaaaaa',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.pauseHint.setOrigin(0.5);
+    this.pauseHint.setScrollFactor(0);
+    this.pauseHint.setDepth(3001);
+    this.pauseHint.setVisible(false);
+
+    // Restart button
+    this.restartButton = this.add.text(width / 2, height / 2 + 50, '[ Restart Game ]', {
+      fontSize: '16px',
+      fontFamily: 'monospace',
+      color: '#ff6666',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.restartButton.setOrigin(0.5);
+    this.restartButton.setScrollFactor(0);
+    this.restartButton.setDepth(3001);
+    this.restartButton.setVisible(false);
+    this.restartButton.setInteractive({ useHandCursor: true });
+    this.restartButton.on('pointerover', () => this.restartButton.setColor('#ffffff'));
+    this.restartButton.on('pointerout', () => this.restartButton.setColor('#ff6666'));
+    this.restartButton.on('pointerdown', () => this.scene.restart());
+
+    // Make main camera ignore pause elements
+    this.cameras.main.ignore([this.pauseOverlay, this.pauseText, this.pauseHint, this.restartButton]);
+
+    // ESC key handler - close popups first, then toggle pause
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (this.isGameOver || this.isSleeping) return;
+
+      // If there's an active popup, close it instead of toggling pause
+      if (this.activePopup) {
+        this.activePopup.hide();
+        return;
+      }
+
+      this.togglePause();
+    });
+  }
+
+  /**
+   * Toggle pause state
+   */
+  togglePause() {
+    this.isPaused = !this.isPaused;
+
+    this.pauseOverlay.setVisible(this.isPaused);
+    this.pauseText.setVisible(this.isPaused);
+    this.pauseHint.setVisible(this.isPaused);
+    this.restartButton.setVisible(this.isPaused);
+
+    if (this.isPaused) {
+      this.dayNightSystem?.pause();
+      this.player?.disableControl();
+      this.physics.pause();
+    } else {
+      this.dayNightSystem?.resume();
+      if (this.player) this.player.canControl = true;
+      this.physics.resume();
+    }
+  }
+
   update(time, delta) {
-    if (this.isGameOver) return;
+    if (this.isGameOver || this.isPaused) return;
 
     this.player.update(time, delta);
     this.humans.forEach(human => human.update(delta));
+    this.pets.forEach(pet => pet.update(delta));
     this.police.forEach(cop => cop.update(delta));
     this.policeDispatcher.processQueue(time);
 
@@ -209,43 +329,38 @@ export class GameScene extends Phaser.Scene {
   // ==================== Entity Spawning ====================
 
   spawnHumans() {
-    const hairColors = Object.values(HAIR_COLORS);
-    const skinColors = Object.values(SKIN_COLORS);
     const houses = this.townGenerator.getHouses();
 
-    let spawnIndex = 0;
-
-    // Spawn 1-3 humans per house
     for (const house of houses) {
-      const humansInHouse = Phaser.Math.Between(
-        TOWN.HUMANS_PER_HOUSE_MIN,
-        TOWN.HUMANS_PER_HOUSE_MAX
-      );
+      // Determine household composition
+      const numAdults = Phaser.Math.Between(1, 3);
+      const numChildren = Phaser.Math.Between(0, 2);
 
-      for (let h = 0; h < humansInHouse; h++) {
-        let hairColor, skinColor;
+      // 50% chance of uni-racial household
+      const isUniRacial = Math.random() < 0.5;
+      const householdRace = RACES[Phaser.Math.Between(0, RACES.length - 1)];
 
-        // Every 3rd human matches the target preference
-        if (spawnIndex % 3 === 0) {
-          hairColor = this.targetHairColor;
-          skinColor = this.targetSkinColor;
-        } else {
-          do {
-            hairColor = hairColors[Phaser.Math.Between(0, hairColors.length - 1)];
-            skinColor = skinColors[Phaser.Math.Between(0, skinColors.length - 1)];
-          } while (hairColor === this.targetHairColor && skinColor === this.targetSkinColor);
-        }
+      // Track adult races for children inheritance
+      const adultRaces = [];
 
-        // Offset spawn position slightly for multiple humans
-        const offsetX = (h - 1) * 8;
-        const offsetY = (h % 2) * 8;
+      let spawnIndex = 0;
+
+      // Spawn adults first
+      for (let a = 0; a < numAdults; a++) {
+        const race = isUniRacial ? householdRace : RACES[Phaser.Math.Between(0, RACES.length - 1)];
+        adultRaces.push(race);
+        const gender = HUMAN_GENDERS[Phaser.Math.Between(0, HUMAN_GENDERS.length - 1)];
+
+        const offsetX = (spawnIndex - 1) * 8;
+        const offsetY = (spawnIndex % 2) * 8;
 
         const human = new Human(
           this,
           house.centerPixelX + offsetX,
           house.centerPixelY + offsetY,
-          hairColor,
-          skinColor,
+          race,
+          gender,
+          'adult',
           house
         );
 
@@ -257,6 +372,151 @@ export class GameScene extends Phaser.Scene {
         }
 
         spawnIndex++;
+      }
+
+      // Spawn children (inherit race from one of the adults)
+      for (let c = 0; c < numChildren; c++) {
+        // Child inherits race from a random adult in the household
+        const race = adultRaces[Phaser.Math.Between(0, adultRaces.length - 1)];
+        const gender = HUMAN_GENDERS[Phaser.Math.Between(0, HUMAN_GENDERS.length - 1)];
+
+        const offsetX = (spawnIndex - 1) * 8;
+        const offsetY = (spawnIndex % 2) * 8;
+
+        const human = new Human(
+          this,
+          house.centerPixelX + offsetX,
+          house.centerPixelY + offsetY,
+          race,
+          gender,
+          'child',
+          house
+        );
+
+        this.humans.push(human);
+        this.physics.add.collider(human.sprite, this.walls);
+
+        if (this.hud) {
+          this.hud.ignoreGameObject(human.sprite);
+        }
+
+        spawnIndex++;
+      }
+    }
+  }
+
+  spawnPets() {
+    const houses = this.townGenerator.getHouses();
+    const playerHome = this.townGenerator.getPlayerHome();
+
+    // Always spawn a pet at player's home
+    if (playerHome) {
+      const petType = Math.random() < 0.5 ? 'dog' : 'cat';
+      const colors = PET_TYPES[petType].colors;
+      const colorVariant = colors[Phaser.Math.Between(0, colors.length - 1)];
+
+      const pet = new Pet(
+        this,
+        playerHome.centerPixelX,
+        playerHome.centerPixelY,
+        petType,
+        colorVariant,
+        playerHome
+      );
+
+      this.pets.push(pet);
+      this.physics.add.collider(pet.sprite, this.walls);
+
+      if (this.hud) {
+        this.hud.ignoreGameObject(pet.sprite);
+      }
+    }
+
+    for (const house of houses) {
+      // Skip player's home - already spawned a pet there
+      if (playerHome && house.id === playerHome.id) {
+        continue;
+      }
+
+      // Determine pet composition
+      // 50% petless, 30% single pet, 20% multiple pets
+      const roll = Math.random();
+
+      if (roll < HOUSEHOLD_PETS.PETLESS_CHANCE) {
+        // No pets
+        continue;
+      }
+
+      let numDogs = 0;
+      let numCats = 0;
+
+      if (roll < HOUSEHOLD_PETS.PETLESS_CHANCE + HOUSEHOLD_PETS.SINGLE_PET_CHANCE) {
+        // Single pet - 50/50 dog or cat
+        if (Math.random() < 0.5) {
+          numDogs = 1;
+        } else {
+          numCats = 1;
+        }
+      } else {
+        // Multiple pets (remaining 20%)
+        numDogs = Phaser.Math.Between(0, HOUSEHOLD_PETS.MAX_DOGS);
+        numCats = Phaser.Math.Between(0, HOUSEHOLD_PETS.MAX_CATS);
+        // Ensure at least one pet
+        if (numDogs === 0 && numCats === 0) {
+          if (Math.random() < 0.5) {
+            numDogs = 1;
+          } else {
+            numCats = 1;
+          }
+        }
+      }
+
+      // Spawn dogs
+      const dogColors = PET_TYPES.dog.colors;
+      for (let d = 0; d < numDogs; d++) {
+        const colorVariant = dogColors[Phaser.Math.Between(0, dogColors.length - 1)];
+        const offsetX = Phaser.Math.Between(-16, 16);
+        const offsetY = Phaser.Math.Between(-16, 16);
+
+        const pet = new Pet(
+          this,
+          house.centerPixelX + offsetX,
+          house.centerPixelY + offsetY,
+          'dog',
+          colorVariant,
+          house
+        );
+
+        this.pets.push(pet);
+        this.physics.add.collider(pet.sprite, this.walls);
+
+        if (this.hud) {
+          this.hud.ignoreGameObject(pet.sprite);
+        }
+      }
+
+      // Spawn cats
+      const catColors = PET_TYPES.cat.colors;
+      for (let c = 0; c < numCats; c++) {
+        const colorVariant = catColors[Phaser.Math.Between(0, catColors.length - 1)];
+        const offsetX = Phaser.Math.Between(-16, 16);
+        const offsetY = Phaser.Math.Between(-16, 16);
+
+        const pet = new Pet(
+          this,
+          house.centerPixelX + offsetX,
+          house.centerPixelY + offsetY,
+          'cat',
+          colorVariant,
+          house
+        );
+
+        this.pets.push(pet);
+        this.physics.add.collider(pet.sprite, this.walls);
+
+        if (this.hud) {
+          this.hud.ignoreGameObject(pet.sprite);
+        }
       }
     }
   }
@@ -308,6 +568,20 @@ export class GameScene extends Phaser.Scene {
     return cop;
   }
 
+  /**
+   * Spawn cages in player's basement
+   */
+  spawnCages() {
+    const playerHome = this.townGenerator.getPlayerHome();
+    if (!playerHome?.cagePositions) return;
+
+    for (let i = 0; i < playerHome.cagePositions.length; i++) {
+      const pos = playerHome.cagePositions[i];
+      const cage = new Cage(this, pos.x, pos.y, i);
+      this.cages.push(cage);
+    }
+  }
+
   isPositionBlocked(x, y) {
     if (!this.townData?.grid) return false;
     const tileX = Math.floor(x / this.tileSize);
@@ -336,8 +610,8 @@ export class GameScene extends Phaser.Scene {
   // ==================== Public API for Systems ====================
 
   // Corpse management (delegated to CorpseManager)
-  spawnCorpse(x, y, textureKey, isPolice = false, hairColor = null, skinColor = null) {
-    return this.corpseManager.spawn(x, y, textureKey, isPolice, hairColor, skinColor);
+  spawnCorpse(x, y, textureKey, isPolice = false, race = null, gender = null, age = null) {
+    return this.corpseManager.spawn(x, y, textureKey, isPolice, race, gender, age);
   }
 
   spawnBloodSplatter(x, y) {
@@ -409,6 +683,27 @@ export class GameScene extends Phaser.Scene {
     this.policeDispatcher.queueRespawn(x, y, isCopBody);
   }
 
+  // Cage management
+  getNearestEmptyCage(x, y, range) {
+    let nearest = null;
+    let nearestDist = range;
+
+    for (const cage of this.cages) {
+      if (!cage.isEmpty()) continue;
+
+      const dist = Math.sqrt(
+        Math.pow(cage.x - x, 2) + Math.pow(cage.y - y, 2)
+      );
+
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = cage;
+      }
+    }
+
+    return nearest;
+  }
+
   // ==================== Player Transformation ====================
 
   /**
@@ -466,12 +761,7 @@ export class GameScene extends Phaser.Scene {
     g.generateTexture(key, 16, 16);
   }
 
-  // ==================== Score & Game State ====================
-
-  addScore(points) {
-    this.score += points;
-    this.hud.setScore(this.score);
-  }
+  // ==================== Game State ====================
 
   triggerGameOver() {
     if (this.isGameOver) return;
@@ -492,7 +782,20 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    this.hud.showGameOver(this.score);
+    this.hud.showGameOver();
+  }
+
+  /**
+   * Trigger game over when a released prisoner reaches home and reports the player
+   */
+  triggerPrisonerEscapeGameOver() {
+    if (this.isGameOver) return;
+    this.isGameOver = true;
+
+    this.player.disableControl();
+
+    // Show custom game over message
+    this.hud.showGameOver('Your secrets were reported to the police.\nYou have nowhere to hide.');
   }
 
   // ==================== Sleep System ====================
@@ -545,7 +848,7 @@ export class GameScene extends Phaser.Scene {
     this.player.disableControl();
 
     // Show pass out message
-    this.hud.showGameOver(this.score, 'You passed out in the street...\nYour secrets were uncovered.');
+    this.hud.showGameOver('You passed out in the street...\nYour secrets were uncovered.');
   }
 
   /**
@@ -555,6 +858,11 @@ export class GameScene extends Phaser.Scene {
     this.isSleeping = false;
     this.dayNightSystem.startNewDay();
     this.player.canControl = true;
+
+    // Add new daily objective
+    if (this.objectiveSystem) {
+      this.objectiveSystem.onNewDay();
+    }
 
     // Show the new day notification
     if (this.hud) {

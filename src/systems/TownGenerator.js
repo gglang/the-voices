@@ -685,9 +685,10 @@ export class TownGenerator {
   }
 
   markBasementArea(building) {
+    // Larger basement for player home with cages (5x5 in lower portion of building)
+    const basementSize = 5;
     const basementX = building.x + 1;
-    const basementY = building.y + 1;
-    const basementSize = 3;
+    const basementY = building.y + building.height - basementSize - 1;
 
     building.basementArea = {
       x: basementX,
@@ -698,6 +699,7 @@ export class TownGenerator {
       centerY: (basementY + basementSize / 2) * this.tileSize
     };
 
+    // Mark basement floor tiles
     for (let tx = basementX; tx < basementX + basementSize; tx++) {
       for (let ty = basementY; ty < basementY + basementSize; ty++) {
         if (tx < building.x + building.width - 1 && ty < building.y + building.height - 1) {
@@ -707,6 +709,27 @@ export class TownGenerator {
             neighborhood: building.neighborhood
           };
         }
+      }
+    }
+
+    // Add interior walls around basement (only hatch allows entry)
+    this.addBasementInteriorWalls(building, basementX, basementY, basementSize);
+  }
+
+  addBasementInteriorWalls(building, basementX, basementY, basementSize) {
+    // Mark interior wall tiles above the basement (separating main floor from basement)
+    // The wall is at basementY - 1 (above the basement)
+    const wallY = basementY - 1;
+
+    for (let tx = basementX; tx < basementX + basementSize; tx++) {
+      // Don't put a wall where the hatch will be
+      const hatchTileX = building.x + Math.floor(building.width / 2);
+      if (tx !== hatchTileX) {
+        this.grid[tx][wallY] = {
+          type: 'wall',
+          buildingId: building.id,
+          neighborhood: building.neighborhood
+        };
       }
     }
   }
@@ -897,11 +920,19 @@ export class TownGenerator {
         y: pentagramY,
         radius: 20
       };
+
+      // Calculate cage positions around pentagram (3 cages)
+      const cageSpacing = 32;
+      building.cagePositions = [
+        { x: pentagramX - cageSpacing, y: pentagramY - cageSpacing / 2 },  // Left of pentagram
+        { x: pentagramX + cageSpacing, y: pentagramY - cageSpacing / 2 },  // Right of pentagram
+        { x: pentagramX, y: pentagramY + cageSpacing }                     // Below pentagram
+      ];
     }
 
-    // Floor hatch
-    const hatchX = (building.x + 3) * this.tileSize + this.tileSize / 2;
-    const hatchY = (building.y + 3) * this.tileSize + this.tileSize / 2;
+    // Floor hatch - positioned at center of building, above basement area
+    const hatchX = (building.x + Math.floor(building.width / 2)) * this.tileSize + this.tileSize / 2;
+    const hatchY = (building.basementArea.y - 1) * this.tileSize + this.tileSize / 2;
     const hatch = this.scene.add.image(hatchX, hatchY, 'floor_hatch');
     hatch.setDepth(DEPTH.FURNITURE);
     if (this.scene.hud) this.scene.hud.ignoreGameObject(hatch);
@@ -920,7 +951,8 @@ export class TownGenerator {
   addFurniture(building) {
     const { x, y, width, height, type } = building;
 
-    const startX = type === 'player_home' ? x + 4 : x + 1;
+    // For player home, bed is in upper right area (away from basement in lower left)
+    const startX = type === 'player_home' ? x + width - 3 : x + 1;
     const startY = type === 'player_home' ? y + 1 : y + 1;
 
     // Bed

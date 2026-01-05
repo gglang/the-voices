@@ -16,11 +16,12 @@ export class CorpseManager {
    * @param {number} y - Y position
    * @param {string} textureKey - Texture key for the corpse
    * @param {boolean} isPolice - Whether this is a police corpse
-   * @param {number} hairColor - Hair color of the victim (for humans)
-   * @param {number} skinColor - Skin color of the victim (for humans)
+   * @param {object} race - Race of the victim (for humans) { name, skin, hair }
+   * @param {string} gender - Gender of the victim (for humans)
+   * @param {string} age - Age of the victim (for humans)
    * @returns {object} Corpse data object
    */
-  spawn(x, y, textureKey, isPolice = false, hairColor = null, skinColor = null) {
+  spawn(x, y, textureKey, isPolice = false, race = null, gender = null, age = null) {
     const sprite = this.scene.add.image(x, y, textureKey);
     sprite.setDepth(DEPTH.CORPSE);
 
@@ -33,8 +34,9 @@ export class CorpseManager {
       x,
       y,
       isPolice,
-      hairColor,
-      skinColor,
+      race,
+      gender,
+      age,
       discovered: false,
       isPickedUp: false
     };

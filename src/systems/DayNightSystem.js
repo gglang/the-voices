@@ -21,8 +21,7 @@ export class DayNightSystem {
 
     // Real-time to game-time ratio (1 real second = X game minutes)
     // Target: 21 hours of gameplay = ~666 seconds (31.7 seconds per game hour)
-    // DEBUG: Reduced to 30 seconds total (21 hours / 30 seconds = 42 game minutes per second)
-    this.GAME_MINUTES_PER_SECOND = (21 * 60) / 30; // 42 game minutes per second for 30-second day
+    this.GAME_MINUTES_PER_SECOND = 60 / 31.7; // ~1.89 game minutes per second
 
     // Current time (in game minutes from midnight)
     this.currentTime = this.START_HOUR * this.MINUTES_PER_HOUR; // Start at 9am
