@@ -99,10 +99,12 @@ export class ActionPopup {
     // Create text for each action
     actions.forEach((action, index) => {
       const displayText = `${action.name} (${action.key})`;
+      // Objective actions are displayed in yellow, normal actions in white
+      const textColor = action.isObjectiveAction ? '#ffff44' : '#ffffff';
       const text = this.scene.add.text(padding, padding + index * lineHeight, displayText, {
         fontSize: '8px',
         fontFamily: 'monospace',
-        color: '#ffffff',
+        color: textColor,
         stroke: '#000000',
         strokeThickness: 1
       });

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { TOWN, DEPTH, MAP, NEIGHBORHOODS, HOUSE_TYPES } from '../config/constants.js';
 import { Door } from '../entities/Door.js';
+import { Mother } from '../entities/Mother.js';
 
 /**
  * Hand-crafted town generator with distinct neighborhood layouts.
@@ -942,6 +943,13 @@ export class TownGenerator {
     if (this.scene.hud) this.scene.hud.ignoreGameObject(hatch);
 
     this.addFurniture(building);
+
+    // Mother in chair - placed in the living area (right side of house, away from basement)
+    // Position her in the upper-right area, near the bed but not overlapping
+    const motherX = (building.x + building.width - 4) * this.tileSize + this.tileSize / 2;
+    const motherY = (building.y + 3) * this.tileSize + this.tileSize / 2;
+    this.mother = new Mother(this.scene, motherX, motherY);
+    building.mother = this.mother;
   }
 
   addPoliceSign(building) {

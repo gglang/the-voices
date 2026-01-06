@@ -19,6 +19,10 @@ import { TownGenerator } from '../systems/TownGenerator.js';
 import { ActionSystem } from '../systems/ActionSystem.js';
 import { DayNightSystem } from '../systems/DayNightSystem.js';
 import { ObjectiveSystem } from '../systems/ObjectiveSystem.js';
+import { SanitySystem } from '../systems/SanitySystem.js';
+import { ObjectiveActionSystem } from '../systems/ObjectiveActionSystem.js';
+import { PlayerLocationSystem } from '../systems/PlayerLocationSystem.js';
+import { NotorietySystem } from '../systems/NotorietySystem.js';
 import { ObjectivesWidget } from '../ui/ObjectivesWidget.js';
 import { ObjectivePopup } from '../ui/ObjectivePopup.js';
 import {
@@ -77,6 +81,13 @@ export class GameScene extends Phaser.Scene {
     this.policeDispatcher = new PoliceDispatcher(this);
     this.townGenerator = new TownGenerator(this);
     this.actionSystem = new ActionSystem(this);
+    this.sanitySystem = new SanitySystem(this);
+    this.objectiveActionSystem = new ObjectiveActionSystem(this);
+    this.playerLocationSystem = new PlayerLocationSystem(this);
+    this.notorietySystem = new NotorietySystem(this);
+
+    // Link ActionSystem to ObjectiveActionSystem
+    this.actionSystem.setObjectiveActionSystem(this.objectiveActionSystem);
 
     // Door colliders - only blocks player, not NPCs
     this.doorColliders = this.physics.add.staticGroup();
@@ -99,6 +110,9 @@ export class GameScene extends Phaser.Scene {
 
     // Generate the town
     this.townData = this.townGenerator.generate(this.mapWidth, this.mapHeight);
+
+    // Initialize player location system with town data
+    this.playerLocationSystem.initialize(this.townData);
 
     // Spawn player inside their home
     const playerHome = this.townGenerator.getPlayerHome();
@@ -315,9 +329,14 @@ export class GameScene extends Phaser.Scene {
       );
     }
 
+    // Update player location system
+    if (this.playerLocationSystem) {
+      this.playerLocationSystem.update();
+    }
+
     // Update minimap
     if (this.minimap) {
-      this.minimap.update();
+      this.minimap.update(delta);
     }
 
     // Update day/night system
@@ -335,6 +354,11 @@ export class GameScene extends Phaser.Scene {
     // Update clock widget
     if (this.clockWidget) {
       this.clockWidget.update();
+    }
+
+    // Update sanity system
+    if (this.sanitySystem) {
+      this.sanitySystem.update(delta);
     }
   }
 

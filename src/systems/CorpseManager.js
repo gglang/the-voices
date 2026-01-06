@@ -100,6 +100,12 @@ export class CorpseManager {
           }
         }
 
+        // Add objective-specific corpse actions (e.g., Leave Letter)
+        if (this.scene.objectiveActionSystem) {
+          const corpseActions = this.scene.objectiveActionSystem.getActionsForCorpse(corpseData);
+          actions.push(...corpseActions);
+        }
+
         return actions;
       }
     });

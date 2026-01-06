@@ -903,6 +903,12 @@ export class Human {
           // Mark corpse as being investigated so only one cop responds
           corpse.investigated = true;
           this.scene.alertCopsToDisturbance(corpse.x, corpse.y);
+
+          // Award notoriety XP for body discovery (once per body)
+          if (this.scene.notorietySystem) {
+            this.scene.notorietySystem.awardBodyDiscoveryXP(corpse);
+            this.scene.hud?.updateNotorietyDisplay();
+          }
           break;
         }
       }

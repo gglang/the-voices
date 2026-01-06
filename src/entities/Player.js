@@ -184,9 +184,10 @@ export class Player {
       // Gift to pets/rats always available
       const nearbyPet = this.findNearbyPet();
       const nearbyRat = this.findNearbyRat();
-      // Gift to humans/cops only if cooked
-      const nearbyHuman = this.carriedRat.isCooked ? this.findNearbyHuman() : null;
-      const nearbyCop = this.carriedRat.isCooked ? this.findNearbyCop() : null;
+      // Gift to humans/cops only if cooked AND not identified
+      const isIdentified = this.scene.identificationSystem?.isIdentified() || false;
+      const nearbyHuman = (this.carriedRat.isCooked && !isIdentified) ? this.findNearbyHuman() : null;
+      const nearbyCop = (this.carriedRat.isCooked && !isIdentified) ? this.findNearbyCop() : null;
 
       if (nearbyRat) {
         actions.push({
@@ -250,11 +251,12 @@ export class Player {
 
       // Gift is available when near a valid target
       // Rats and pets can receive cooked or uncooked body parts
-      // Humans and cops can only receive cooked body parts
+      // Humans and cops can only receive cooked body parts AND player must not be identified
+      const isIdentified = this.scene.identificationSystem?.isIdentified() || false;
       const nearbyRat = this.findNearbyRat();
       const nearbyPet = this.findNearbyPet();
-      const nearbyHuman = this.carriedBodyPart.isCooked ? this.findNearbyHuman() : null;
-      const nearbyCop = this.carriedBodyPart.isCooked ? this.findNearbyCop() : null;
+      const nearbyHuman = (this.carriedBodyPart.isCooked && !isIdentified) ? this.findNearbyHuman() : null;
+      const nearbyCop = (this.carriedBodyPart.isCooked && !isIdentified) ? this.findNearbyCop() : null;
 
       if (nearbyRat) {
         actions.push({
@@ -365,8 +367,9 @@ export class Player {
         return;
       }
 
-      // Check for nearby human/cop (cooked only)
-      if (this.carriedBodyPart.isCooked) {
+      // Check for nearby human/cop (cooked only, and not identified)
+      const isIdentified = this.scene.identificationSystem?.isIdentified() || false;
+      if (this.carriedBodyPart.isCooked && !isIdentified) {
         const nearbyHuman = this.findNearbyHuman();
         if (nearbyHuman) {
           this.giftToHuman(nearbyHuman);
@@ -576,15 +579,22 @@ export class Player {
 
     // Check for witnesses (humans who saw the kill)
     // This applies to killing pets, kids, or any human
-    this.checkForKillWitnesses(killX, killY);
+    this.checkForKillWitnesses(killX, killY, isPet);
   }
 
   /**
    * Check if any human witnessed a kill and identify player if so
+   * Also awards notoriety XP for witnessed kills
+   * @param {number} killX - X position of kill
+   * @param {number} killY - Y position of kill
+   * @param {boolean} isPetKill - Whether this was a pet kill
    */
-  checkForKillWitnesses(killX, killY) {
+  checkForKillWitnesses(killX, killY, isPetKill = false) {
     const witnessRange = 5 * 16; // 5 tiles
+    let witnessCount = 0;
+    let hasAlertedCops = false;
 
+    // Check humans
     for (const human of this.scene.humans) {
       if (!human.isAlive) continue;
 
@@ -602,8 +612,11 @@ export class Player {
         )) {
           // Human witnessed the kill - identify player and alert cops
           this.scene.identifyPlayer(human.sprite);
-          this.scene.alertCopsToDisturbance(killX, killY);
-          return; // Only need one witness
+          if (!hasAlertedCops) {
+            this.scene.alertCopsToDisturbance(killX, killY);
+            hasAlertedCops = true;
+          }
+          witnessCount++;
         }
       }
     }
@@ -625,9 +638,16 @@ export class Player {
         )) {
           // Cop witnessed the kill
           this.scene.identifyPlayer(cop.sprite);
-          return;
+          witnessCount++;
         }
       }
+    }
+
+    // Award notoriety XP for witnessed kills
+    if (witnessCount > 0 && this.scene.notorietySystem) {
+      this.scene.notorietySystem.awardWitnessedKillXP(witnessCount, isPetKill);
+      // Update the HUD display
+      this.scene.hud?.updateNotorietyDisplay();
     }
   }
 
@@ -1004,11 +1024,12 @@ export class Player {
   }
 
   /**
-   * Gift cooked body part to a human or cop
+   * Gift cooked body part to a human or cop (only if not identified)
    */
   giftToHuman(human) {
     if (!this.carriedBodyPart || !human) return;
     if (!this.carriedBodyPart.isCooked) return;  // Only cooked for humans/cops
+    if (this.scene.identificationSystem?.isIdentified()) return;  // Can't gift if identified
 
     // Human eats the body part
     this.spawnMunchingEffect(human.sprite.x, human.sprite.y);
@@ -1391,11 +1412,12 @@ export class Player {
   }
 
   /**
-   * Gift cooked rat to a human or cop
+   * Gift cooked rat to a human or cop (only if not identified)
    */
   giftRatToHuman(human) {
     if (!this.carriedRat || !human) return;
     if (!this.carriedRat.isCooked) return;  // Only cooked rats for humans/cops
+    if (this.scene.identificationSystem?.isIdentified()) return;  // Can't gift if identified
 
     // Human eats the rat
     this.spawnMunchingEffect(human.sprite.x, human.sprite.y);

@@ -68,6 +68,70 @@ export class HUD {
     // Store scene reference for later use
     this.sceneRef = scene;
 
+    // Sanity status widget (above identification widget)
+    this.sanityBg = scene.add.graphics();
+    this.sanityBg.setScrollFactor(0);
+    this.sanityBg.setDepth(1000);
+    this.uiElements.push(this.sanityBg);
+
+    this.sanityText = scene.add.text(0, 0, 'SANE', {
+      fontSize: '10px',
+      fontFamily: 'monospace',
+      color: '#44ff44',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.sanityText.setOrigin(0.5, 0.5);
+    this.sanityText.setScrollFactor(0);
+    this.sanityText.setDepth(1001);
+    this.uiElements.push(this.sanityText);
+
+    // Brain icon for sanity status
+    this.sanityIcon = scene.add.graphics();
+    this.sanityIcon.setScrollFactor(0);
+    this.sanityIcon.setDepth(1001);
+    this.uiElements.push(this.sanityIcon);
+
+    // Sanity pulse state
+    this.sanityPulseAlpha = 0;
+    this.sanityPulseDirection = 1;
+
+    // Notoriety widget (above sanity status)
+    this.notorietyBg = scene.add.graphics();
+    this.notorietyBg.setScrollFactor(0);
+    this.notorietyBg.setDepth(1000);
+    this.uiElements.push(this.notorietyBg);
+
+    this.notorietyText = scene.add.text(0, 0, 'LVL 1', {
+      fontSize: '10px',
+      fontFamily: 'monospace',
+      color: '#ffaa00',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.notorietyText.setOrigin(0.5, 0.5);
+    this.notorietyText.setScrollFactor(0);
+    this.notorietyText.setDepth(1001);
+    this.uiElements.push(this.notorietyText);
+
+    this.notorietyProgressText = scene.add.text(0, 0, '0/10', {
+      fontSize: '8px',
+      fontFamily: 'monospace',
+      color: '#ffcc44',
+      stroke: '#000000',
+      strokeThickness: 1
+    });
+    this.notorietyProgressText.setOrigin(0.5, 0.5);
+    this.notorietyProgressText.setScrollFactor(0);
+    this.notorietyProgressText.setDepth(1001);
+    this.uiElements.push(this.notorietyProgressText);
+
+    // Notoriety bar graphics
+    this.notorietyBar = scene.add.graphics();
+    this.notorietyBar.setScrollFactor(0);
+    this.notorietyBar.setDepth(1001);
+    this.uiElements.push(this.notorietyBar);
+
     // Identification status widget (above knife icon)
     this.idStatusBg = scene.add.graphics();
     this.idStatusBg.setScrollFactor(0);
@@ -132,6 +196,7 @@ export class HUD {
     this.drawKnifeIcon();
     this.drawTalkIcon();
     this.drawIdStatus();
+    this.drawSanityStatus();
 
     // Update cooldown and ID status every frame
     scene.events.on('update', this.updateFrame, this);
@@ -158,6 +223,177 @@ export class HUD {
 
     // Clean up when scene shuts down (e.g., on restart)
     scene.events.on('shutdown', this.destroy, this);
+
+    // Debug menu setup
+    this.setupDebugMenu();
+  }
+
+  setupDebugMenu() {
+    this.debugMenuVisible = false;
+
+    // Debug menu background
+    this.debugBg = this.scene.add.rectangle(200, 150, 250, 200, 0x000000, 0.9);
+    this.debugBg.setScrollFactor(0);
+    this.debugBg.setDepth(2000);
+    this.debugBg.setVisible(false);
+    this.debugBg.setOrigin(0, 0);
+    this.uiElements.push(this.debugBg);
+
+    // Debug title
+    this.debugTitle = this.scene.add.text(210, 160, 'DEBUG MENU', {
+      fontSize: '16px',
+      fontFamily: 'monospace',
+      color: '#ff00ff',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.debugTitle.setScrollFactor(0);
+    this.debugTitle.setDepth(2001);
+    this.debugTitle.setVisible(false);
+    this.uiElements.push(this.debugTitle);
+
+    // Sanity controls
+    this.debugSanityLabel = this.scene.add.text(210, 190, 'Sanity:', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#ffffff'
+    });
+    this.debugSanityLabel.setScrollFactor(0);
+    this.debugSanityLabel.setDepth(2001);
+    this.debugSanityLabel.setVisible(false);
+    this.uiElements.push(this.debugSanityLabel);
+
+    // Sanity value display
+    this.debugSanityValue = this.scene.add.text(270, 190, '3', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#44ff44'
+    });
+    this.debugSanityValue.setScrollFactor(0);
+    this.debugSanityValue.setDepth(2001);
+    this.debugSanityValue.setVisible(false);
+    this.uiElements.push(this.debugSanityValue);
+
+    // Decrease sanity button
+    this.debugSanityDown = this.scene.add.text(210, 215, '[ - ]', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#ff4444'
+    });
+    this.debugSanityDown.setScrollFactor(0);
+    this.debugSanityDown.setDepth(2001);
+    this.debugSanityDown.setVisible(false);
+    this.debugSanityDown.setInteractive({ useHandCursor: true });
+    this.debugSanityDown.on('pointerdown', () => {
+      if (this.scene.sanitySystem) {
+        this.scene.sanitySystem.decreaseSanity(1);
+        this.updateDebugMenu();
+      }
+    });
+    this.debugSanityDown.on('pointerover', () => this.debugSanityDown.setColor('#ff8888'));
+    this.debugSanityDown.on('pointerout', () => this.debugSanityDown.setColor('#ff4444'));
+    this.uiElements.push(this.debugSanityDown);
+
+    // Increase sanity button
+    this.debugSanityUp = this.scene.add.text(260, 215, '[ + ]', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#44ff44'
+    });
+    this.debugSanityUp.setScrollFactor(0);
+    this.debugSanityUp.setDepth(2001);
+    this.debugSanityUp.setVisible(false);
+    this.debugSanityUp.setInteractive({ useHandCursor: true });
+    this.debugSanityUp.on('pointerdown', () => {
+      if (this.scene.sanitySystem) {
+        this.scene.sanitySystem.increaseSanity(1);
+        this.updateDebugMenu();
+      }
+    });
+    this.debugSanityUp.on('pointerover', () => this.debugSanityUp.setColor('#88ff88'));
+    this.debugSanityUp.on('pointerout', () => this.debugSanityUp.setColor('#44ff44'));
+    this.uiElements.push(this.debugSanityUp);
+
+    // Trigger "Lose It" button
+    this.debugLoseIt = this.scene.add.text(210, 250, '[ Trigger Lose It ]', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#ff8800'
+    });
+    this.debugLoseIt.setScrollFactor(0);
+    this.debugLoseIt.setDepth(2001);
+    this.debugLoseIt.setVisible(false);
+    this.debugLoseIt.setInteractive({ useHandCursor: true });
+    this.debugLoseIt.on('pointerdown', () => {
+      if (this.scene.sanitySystem) {
+        if (this.scene.sanitySystem.isLosingIt) {
+          this.scene.sanitySystem.stopLosingIt();
+        } else {
+          this.scene.sanitySystem.startLosingIt();
+        }
+        this.updateDebugMenu();
+      }
+    });
+    this.debugLoseIt.on('pointerover', () => this.debugLoseIt.setColor('#ffaa44'));
+    this.debugLoseIt.on('pointerout', () => this.debugLoseIt.setColor('#ff8800'));
+    this.uiElements.push(this.debugLoseIt);
+
+    // Close hint
+    this.debugCloseHint = this.scene.add.text(210, 320, 'Press Shift+D to close', {
+      fontSize: '10px',
+      fontFamily: 'monospace',
+      color: '#888888'
+    });
+    this.debugCloseHint.setScrollFactor(0);
+    this.debugCloseHint.setDepth(2001);
+    this.debugCloseHint.setVisible(false);
+    this.uiElements.push(this.debugCloseHint);
+
+    // Make main camera ignore these new elements
+    this.scene.cameras.main.ignore([
+      this.debugBg, this.debugTitle, this.debugSanityLabel,
+      this.debugSanityValue, this.debugSanityDown, this.debugSanityUp,
+      this.debugLoseIt, this.debugCloseHint
+    ]);
+
+    // Setup Shift+D keyboard shortcut
+    this.shiftKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    this.dKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.dKey.on('down', () => {
+      if (this.shiftKey.isDown) {
+        this.toggleDebugMenu();
+      }
+    });
+  }
+
+  toggleDebugMenu() {
+    this.debugMenuVisible = !this.debugMenuVisible;
+
+    const visible = this.debugMenuVisible;
+    this.debugBg.setVisible(visible);
+    this.debugTitle.setVisible(visible);
+    this.debugSanityLabel.setVisible(visible);
+    this.debugSanityValue.setVisible(visible);
+    this.debugSanityDown.setVisible(visible);
+    this.debugSanityUp.setVisible(visible);
+    this.debugLoseIt.setVisible(visible);
+    this.debugCloseHint.setVisible(visible);
+
+    if (visible) {
+      this.updateDebugMenu();
+    }
+  }
+
+  updateDebugMenu() {
+    if (!this.debugMenuVisible) return;
+
+    const sanity = this.scene.sanitySystem?.sanity ?? 3;
+    const colorHex = this.scene.sanitySystem?.getSanityColorHex() || '#44ff44';
+    this.debugSanityValue.setText(sanity.toString());
+    this.debugSanityValue.setColor(colorHex);
+
+    const isLosingIt = this.scene.sanitySystem?.isLosingIt || false;
+    this.debugLoseIt.setText(isLosingIt ? '[ Stop Losing It ]' : '[ Trigger Lose It ]');
   }
 
   // Call this method when adding new game objects to make UI camera ignore them
@@ -199,6 +435,16 @@ export class HUD {
     this.idStatusX = this.knifeX;
     this.idStatusY = this.knifeY - 60; // Above the knife
     this.drawIdStatus();
+
+    // Sanity status (above identification status)
+    this.sanityX = this.knifeX;
+    this.sanityY = this.idStatusY - 32; // Above the identification
+    this.drawSanityStatus();
+
+    // Notoriety status (above sanity status)
+    this.notorietyX = this.knifeX;
+    this.notorietyY = this.sanityY - 36; // Above the sanity
+    this.drawNotorietyStatus();
   }
 
   drawKnifeIcon() {
@@ -291,6 +537,7 @@ export class HUD {
     this.updateCooldown();
     this.updateTalkCooldown();
     this.updateIdStatus();
+    this.updateSanityDisplay();
   }
 
   updateCooldown() {
@@ -420,6 +667,197 @@ export class HUD {
 
   updateIdStatus() {
     this.drawIdStatus();
+  }
+
+  drawSanityStatus() {
+    if (!this.sanityBg || !this.sanityIcon) return;
+
+    const x = this.sanityX || 0;
+    const y = this.sanityY || 0;
+
+    // Get sanity info from system
+    const sanitySystem = this.scene.sanitySystem;
+    const sanity = sanitySystem?.sanity ?? 3;
+    const label = sanitySystem?.getSanityLabel() || 'SANE';
+    const color = sanitySystem?.getSanityColor() || 0x44ff44;
+    const colorHex = sanitySystem?.getSanityColorHex() || '#44ff44';
+
+    // Calculate pulse alpha for sanity 1 or 0
+    let bgAlpha = 0.85;
+    let borderAlpha = 0.8;
+    if (sanity <= 1) {
+      this.sanityPulseAlpha += this.sanityPulseDirection * 0.02;
+      if (this.sanityPulseAlpha >= 1) {
+        this.sanityPulseAlpha = 1;
+        this.sanityPulseDirection = -1;
+      } else if (this.sanityPulseAlpha <= 0.3) {
+        this.sanityPulseAlpha = 0.3;
+        this.sanityPulseDirection = 1;
+      }
+      bgAlpha = 0.5 + 0.35 * this.sanityPulseAlpha;
+      borderAlpha = 0.5 + 0.5 * this.sanityPulseAlpha;
+    }
+
+    // Widget dimensions - wider to fit "ON THE BRINK"
+    const widgetWidth = 130;
+    const widgetHeight = 24;
+    const rightEdge = x + 50; // Same right edge as identification widget
+    const leftEdge = rightEdge - widgetWidth;
+
+    // Draw background pill
+    this.sanityBg.clear();
+    const bgColor = sanity <= 1 ? 0x660000 : (sanity === 2 ? 0x333300 : 0x003300);
+    this.sanityBg.fillStyle(bgColor, bgAlpha);
+    this.sanityBg.fillRoundedRect(leftEdge, y - widgetHeight / 2, widgetWidth, widgetHeight, 8);
+    this.sanityBg.lineStyle(2, color, borderAlpha);
+    this.sanityBg.strokeRoundedRect(leftEdge, y - widgetHeight / 2, widgetWidth, widgetHeight, 8);
+
+    // Draw sanity pips (3 circles) on the right side
+    this.sanityIcon.clear();
+    for (let i = 0; i < 3; i++) {
+      const pipX = rightEdge - 10 - (2 - i) * 10;
+      const pipY = y;
+      const filled = i < sanity;
+
+      if (filled) {
+        this.sanityIcon.fillStyle(color);
+        this.sanityIcon.fillCircle(pipX, pipY, 4);
+      } else {
+        this.sanityIcon.lineStyle(1, color, 0.5);
+        this.sanityIcon.strokeCircle(pipX, pipY, 4);
+      }
+    }
+
+    // Draw brain icon on the left
+    const brainX = leftEdge + 14;
+    const brainY = y;
+
+    this.sanityIcon.lineStyle(2, color);
+
+    // Simple brain shape
+    // Left hemisphere
+    this.sanityIcon.beginPath();
+    this.sanityIcon.arc(brainX - 3, brainY, 5, Math.PI * 0.5, Math.PI * 1.5);
+    this.sanityIcon.strokePath();
+
+    // Right hemisphere
+    this.sanityIcon.beginPath();
+    this.sanityIcon.arc(brainX + 3, brainY, 5, -Math.PI * 0.5, Math.PI * 0.5);
+    this.sanityIcon.strokePath();
+
+    // Middle line
+    this.sanityIcon.beginPath();
+    this.sanityIcon.moveTo(brainX, brainY - 5);
+    this.sanityIcon.lineTo(brainX, brainY + 5);
+    this.sanityIcon.strokePath();
+
+    // Update text - positioned between brain and pips
+    if (this.sanityText) {
+      this.sanityText.setPosition(leftEdge + 60, y);
+      this.sanityText.setText(label);
+      this.sanityText.setColor(colorHex);
+      this.sanityText.setFontSize('10px');
+    }
+  }
+
+  updateSanityDisplay() {
+    this.drawSanityStatus();
+  }
+
+  drawNotorietyStatus() {
+    if (!this.notorietyBg || !this.notorietyBar) return;
+
+    const x = this.notorietyX || 0;
+    const y = this.notorietyY || 0;
+
+    // Get notoriety info from system
+    const notorietySystem = this.scene.notorietySystem;
+    const level = notorietySystem?.getLevel() || 1;
+    const progressPercent = notorietySystem?.getProgressPercent() || 0;
+    const progressString = notorietySystem?.getProgressString() || '0/10';
+    const isMaxLevel = notorietySystem?.isMaxLevel() || false;
+
+    // Widget dimensions
+    const widgetWidth = 120;
+    const widgetHeight = 32;
+    const leftEdge = x - widgetWidth / 2;
+    const barWidth = 60;
+    const barHeight = 8;
+    const barX = leftEdge + 50;
+    const barY = y + 5;
+
+    // Colors based on level
+    const baseColor = 0xffaa00;  // Orange/gold
+    const barBgColor = 0x442200;
+    const barFillColor = isMaxLevel ? 0xff4400 : 0xffaa00;
+
+    // Draw background
+    this.notorietyBg.clear();
+    this.notorietyBg.fillStyle(0x332200, 0.85);
+    this.notorietyBg.fillRoundedRect(leftEdge, y - widgetHeight / 2, widgetWidth, widgetHeight, 8);
+    this.notorietyBg.lineStyle(2, baseColor, 0.8);
+    this.notorietyBg.strokeRoundedRect(leftEdge, y - widgetHeight / 2, widgetWidth, widgetHeight, 8);
+
+    // Draw skull icon
+    this.notorietyBg.fillStyle(baseColor);
+    const skullX = leftEdge + 18;
+    const skullY = y - 2;
+
+    // Skull head (circle)
+    this.notorietyBg.fillCircle(skullX, skullY, 7);
+
+    // Skull jaw
+    this.notorietyBg.fillRoundedRect(skullX - 5, skullY + 3, 10, 5, 2);
+
+    // Eye sockets (dark)
+    this.notorietyBg.fillStyle(0x332200);
+    this.notorietyBg.fillCircle(skullX - 3, skullY - 1, 2);
+    this.notorietyBg.fillCircle(skullX + 3, skullY - 1, 2);
+
+    // Nose (triangle/dark)
+    this.notorietyBg.beginPath();
+    this.notorietyBg.moveTo(skullX, skullY + 1);
+    this.notorietyBg.lineTo(skullX - 1.5, skullY + 4);
+    this.notorietyBg.lineTo(skullX + 1.5, skullY + 4);
+    this.notorietyBg.closePath();
+    this.notorietyBg.fillPath();
+
+    // Draw XP progress bar
+    this.notorietyBar.clear();
+
+    // Bar background
+    this.notorietyBar.fillStyle(barBgColor, 1);
+    this.notorietyBar.fillRoundedRect(barX, barY, barWidth, barHeight, 3);
+
+    // Bar fill
+    if (progressPercent > 0) {
+      const fillWidth = Math.max(2, barWidth * progressPercent);
+      this.notorietyBar.fillStyle(barFillColor, 1);
+      this.notorietyBar.fillRoundedRect(barX, barY, fillWidth, barHeight, 3);
+    }
+
+    // Bar border
+    this.notorietyBar.lineStyle(1, baseColor, 0.6);
+    this.notorietyBar.strokeRoundedRect(barX, barY, barWidth, barHeight, 3);
+
+    // Update level text
+    if (this.notorietyText) {
+      const levelText = isMaxLevel ? 'MAX' : `LVL ${level}`;
+      this.notorietyText.setPosition(leftEdge + 55, y - 6);
+      this.notorietyText.setText(levelText);
+      this.notorietyText.setColor(isMaxLevel ? '#ff4400' : '#ffaa00');
+    }
+
+    // Update progress text
+    if (this.notorietyProgressText) {
+      this.notorietyProgressText.setPosition(barX + barWidth / 2, barY + barHeight / 2);
+      this.notorietyProgressText.setText(progressString);
+      this.notorietyProgressText.setColor('#ffcc44');
+    }
+  }
+
+  updateNotorietyDisplay() {
+    this.drawNotorietyStatus();
   }
 
   showNotification(message, duration = 3000) {

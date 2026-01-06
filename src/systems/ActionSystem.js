@@ -10,6 +10,15 @@ export class ActionSystem {
     this.currentTarget = null;
     this.registeredObjects = new Map(); // Map of sprite -> action config
     this.playerContextActions = null; // Function that returns player context actions
+    this.objectiveActionSystem = null; // Reference to ObjectiveActionSystem for objective-specific actions
+  }
+
+  /**
+   * Set the ObjectiveActionSystem reference
+   * @param {ObjectiveActionSystem} system
+   */
+  setObjectiveActionSystem(system) {
+    this.objectiveActionSystem = system;
   }
 
   /**
@@ -101,10 +110,22 @@ export class ActionSystem {
    * Get available actions for an object
    */
   getActionsForObject(sprite, config) {
+    let actions = [];
+
+    // Get base actions from config
     if (config.getActions) {
-      return config.getActions();
+      actions = config.getActions();
+    } else if (config.actions) {
+      actions = [...config.actions];
     }
-    return config.actions || [];
+
+    // Add objective-specific actions if ObjectiveActionSystem is available
+    if (this.objectiveActionSystem && config.owner) {
+      const objectiveActions = this.objectiveActionSystem.getActionsForEntity(config.owner);
+      actions = [...actions, ...objectiveActions];
+    }
+
+    return actions;
   }
 
   /**

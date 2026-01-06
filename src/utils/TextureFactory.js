@@ -57,6 +57,8 @@ export class TextureFactory {
     this.createRatTextures();
     // Body parts
     this.createBodyPartTextures();
+    // Mother in chair
+    this.createMotherInChair();
   }
 
   /**
@@ -2213,5 +2215,79 @@ export class TextureFactory {
     g.fillRect(4, 5, 1, 1);
 
     g.generateTexture(key, 8, 6);
+  }
+
+  // ==================== Mother in Chair ====================
+
+  /**
+   * Create dead mother sitting in rocking chair texture
+   * Old woman with gray hair, X eyes, sitting in a wooden chair
+   */
+  createMotherInChair() {
+    const key = 'mother_in_chair';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Chair back (wooden rocking chair)
+    g.fillStyle(0x5a3a1a); // Dark wood
+    g.fillRect(2, 0, 20, 3);  // Top of chair back
+    g.fillRect(2, 0, 3, 16);  // Left side of chair back
+    g.fillRect(19, 0, 3, 16); // Right side of chair back
+
+    // Chair seat
+    g.fillStyle(0x6a4a2a); // Slightly lighter wood
+    g.fillRect(0, 14, 24, 4);
+
+    // Chair arms
+    g.fillStyle(0x5a3a1a);
+    g.fillRect(0, 10, 3, 5);  // Left arm
+    g.fillRect(21, 10, 3, 5); // Right arm
+
+    // Rocking chair legs/rockers
+    g.fillStyle(0x4a2a0a);
+    g.fillRect(0, 18, 24, 2);  // Rocker base
+    g.fillRect(2, 17, 2, 3);   // Left leg
+    g.fillRect(20, 17, 2, 3);  // Right leg
+
+    // Mother's body - old woman in dark dress
+    // Gray/white hair (long, old lady style)
+    g.fillStyle(0xaaaaaa); // Gray hair
+    g.fillRect(7, 3, 10, 4);   // Top of head
+    g.fillRect(5, 5, 4, 6);    // Left side hair (longer)
+    g.fillRect(15, 5, 4, 6);   // Right side hair (longer)
+
+    // Face (pale, dead skin tone)
+    g.fillStyle(0x9a8a7a); // Pale grayish skin
+    g.fillRect(8, 5, 8, 4);
+
+    // X eyes (dead)
+    g.lineStyle(1, 0x000000);
+    // Left eye X
+    g.lineBetween(9, 5, 11, 7);
+    g.lineBetween(9, 7, 11, 5);
+    // Right eye X
+    g.lineBetween(13, 5, 15, 7);
+    g.lineBetween(13, 7, 15, 5);
+
+    // Body - dark dress
+    g.fillStyle(0x2a2a3a); // Dark purple-ish dress
+    g.fillRect(6, 9, 12, 6);
+
+    // Arms resting on chair arms
+    g.fillStyle(0x9a8a7a); // Skin color for hands
+    g.fillRect(3, 11, 3, 2);  // Left hand on arm rest
+    g.fillRect(18, 11, 3, 2); // Right hand on arm rest
+
+    // Lap/legs under dress
+    g.fillStyle(0x2a2a3a);
+    g.fillRect(7, 14, 10, 2);
+
+    // Feet (old lady shoes)
+    g.fillStyle(0x1a1a1a);
+    g.fillRect(8, 16, 3, 2);
+    g.fillRect(13, 16, 3, 2);
+
+    g.generateTexture(key, 24, 20);
   }
 }

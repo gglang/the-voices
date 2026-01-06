@@ -375,6 +375,12 @@ export class Police {
 
       // Mark body so backup isn't called again
       bodyPresent.backupCalled = true;
+
+      // Award notoriety XP for body discovery (once per body)
+      if (this.scene.notorietySystem) {
+        this.scene.notorietySystem.awardBodyDiscoveryXP(bodyPresent);
+        this.scene.hud?.updateNotorietyDisplay();
+      }
     }
 
     // Done investigating - resume patrol

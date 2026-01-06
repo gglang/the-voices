@@ -14,27 +14,32 @@ export class ObjectiveSystem {
       {
         title: 'Make a Sacrifice',
         description: 'The voices demand blood. Bring a body to a ritual site and perform a sacrifice.',
-        rewards: 'The voices grow stronger...'
+        rewards: 'The voices grow stronger...',
+        xp: 5
       },
       {
         title: 'Remain Unseen',
         description: 'Complete the day without being identified by anyone.',
-        rewards: 'Your anonymity is preserved.'
+        rewards: 'Your anonymity is preserved.',
+        xp: 3
       },
       {
         title: 'Visit the Basement',
         description: 'Return to your basement. The ritual site awaits.',
-        rewards: 'A sense of dark comfort.'
+        rewards: 'A sense of dark comfort.',
+        xp: 2
       },
       {
         title: 'Explore the Town',
         description: 'Wander through the streets. Know your hunting grounds.',
-        rewards: 'Knowledge of the terrain.'
+        rewards: 'Knowledge of the terrain.',
+        xp: 2
       },
       {
         title: 'Avoid the Police',
         description: 'Do not let any officer get too close today.',
-        rewards: 'Freedom to continue your work.'
+        rewards: 'Freedom to continue your work.',
+        xp: 3
       }
     ];
   }
@@ -51,6 +56,7 @@ export class ObjectiveSystem {
       title: template.title,
       description: template.description,
       rewards: template.rewards,
+      xp: template.xp || 0,
       isDaily: true,
       isComplete: false
     };
@@ -77,13 +83,18 @@ export class ObjectiveSystem {
 
   /**
    * Add a custom objective
+   * @param {string} title
+   * @param {string} description
+   * @param {string} rewards - Text description of rewards
+   * @param {number} xp - Notoriety XP awarded on completion
    */
-  addObjective(title, description, rewards = null) {
+  addObjective(title, description, rewards = null, xp = 0) {
     const objective = {
       id: this.nextId++,
       title,
       description,
       rewards: rewards || 'None',
+      xp: xp || 0,
       isDaily: false,
       isComplete: false
     };
@@ -106,6 +117,12 @@ export class ObjectiveSystem {
       // Show notification
       if (this.scene.hud) {
         this.scene.hud.showNotification(`Objective complete: ${obj.title}`, 3000);
+      }
+
+      // Award notoriety XP
+      if (obj.xp > 0 && this.scene.notorietySystem) {
+        this.scene.notorietySystem.awardObjectiveXP(obj.xp, obj.title);
+        this.scene.hud?.updateNotorietyDisplay();
       }
     }
   }

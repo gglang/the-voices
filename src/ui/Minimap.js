@@ -1,4 +1,5 @@
 import { MINIMAP } from '../config/constants.js';
+import { LocationType } from '../systems/PlayerLocationSystem.js';
 
 /**
  * Minimap UI component showing player, corpses, buildings, roads, and ritual sites
@@ -16,15 +17,22 @@ export class Minimap {
     this.background = scene.add.graphics();
     this.staticLayer = scene.add.graphics();
     this.dynamicLayer = scene.add.graphics();
+    this.highlightLayer = scene.add.graphics();  // Layer for location highlights
+
+    // Pulse animation state
+    this.pulseTime = 0;
+    this.pulseSpeed = 2;  // Cycles per second
 
     // Set up UI properties
     this.background.setScrollFactor(0);
     this.staticLayer.setScrollFactor(0);
     this.dynamicLayer.setScrollFactor(0);
+    this.highlightLayer.setScrollFactor(0);
 
     this.background.setDepth(999);
     this.staticLayer.setDepth(1000);
-    this.dynamicLayer.setDepth(1001);
+    this.highlightLayer.setDepth(1001);  // Above static, below dynamic
+    this.dynamicLayer.setDepth(1002);
 
     // Store position
     this.x = 0;
@@ -146,10 +154,16 @@ export class Minimap {
   }
 
   /**
-   * Update dynamic elements (player, corpses, ritual sites)
+   * Update dynamic elements (player, corpses, ritual sites, location highlights)
    */
-  update() {
+  update(delta) {
     this.dynamicLayer.clear();
+
+    // Update pulse animation
+    this.pulseTime += (delta || 16) / 1000;
+
+    // Draw location highlights
+    this.drawLocationHighlights();
 
     // Draw ritual sites
     this.staticLayer.fillStyle(MINIMAP.COLORS.RITUAL_SITE);
@@ -183,18 +197,137 @@ export class Minimap {
   }
 
   /**
+   * Draw pulsing yellow borders for highlighted locations
+   */
+  drawLocationHighlights() {
+    this.highlightLayer.clear();
+
+    const locationSystem = this.scene.playerLocationSystem;
+    if (!locationSystem) return;
+
+    const highlightedLocations = locationSystem.getHighlightedLocations();
+    if (highlightedLocations.size === 0) return;
+
+    // Calculate pulse alpha (oscillates between 0.3 and 0.8)
+    const pulseAlpha = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(this.pulseTime * Math.PI * this.pulseSpeed));
+    const borderColor = 0xffff00;  // Yellow
+    const borderWidth = 2;
+
+    this.highlightLayer.lineStyle(borderWidth, borderColor, pulseAlpha);
+
+    for (const locationType of highlightedLocations) {
+      const bounds = locationSystem.getMinimapBounds(locationType);
+
+      for (const bound of bounds) {
+        this.drawLocationBound(bound);
+      }
+    }
+  }
+
+  /**
+   * Draw a single location bound on the minimap
+   * @param {Object} bound - Bound object from PlayerLocationSystem
+   */
+  drawLocationBound(bound) {
+    // Convert tile coordinates to minimap coordinates
+    const tileSize = this.townData.tileSize;
+
+    switch (bound.shape) {
+      case 'rect':
+        const rx = this.x + bound.x * tileSize * this.scaleX;
+        const ry = this.y + bound.y * tileSize * this.scaleY;
+        const rw = bound.width * tileSize * this.scaleX;
+        const rh = bound.height * tileSize * this.scaleY;
+        this.highlightLayer.strokeRect(rx, ry, rw, rh);
+        break;
+
+      case 'circle':
+        const cx = this.x + bound.centerX * tileSize * this.scaleX;
+        const cy = this.y + bound.centerY * tileSize * this.scaleY;
+        const radius = bound.radius * tileSize * this.scaleX;  // Use scaleX for uniform scaling
+        this.highlightLayer.strokeCircle(cx, cy, radius);
+        break;
+
+      case 'region':
+        // For complex regions (Uplands/Downlands), draw the bounding area
+        // but with visual indication it's a partial region
+        const regionX = this.x + bound.x * tileSize * this.scaleX;
+        const regionY = this.y + bound.y * tileSize * this.scaleY;
+        const regionW = bound.width * tileSize * this.scaleX;
+        const regionH = bound.height * tileSize * this.scaleY;
+
+        // Draw dashed-style rectangle (using multiple small segments)
+        this.drawDashedRect(regionX, regionY, regionW, regionH);
+        break;
+    }
+  }
+
+  /**
+   * Draw a dashed rectangle for region bounds
+   */
+  drawDashedRect(x, y, width, height) {
+    const dashLength = 4;
+    const gapLength = 4;
+
+    // Top edge
+    this.drawDashedLine(x, y, x + width, y, dashLength, gapLength);
+    // Bottom edge
+    this.drawDashedLine(x, y + height, x + width, y + height, dashLength, gapLength);
+    // Left edge
+    this.drawDashedLine(x, y, x, y + height, dashLength, gapLength);
+    // Right edge
+    this.drawDashedLine(x + width, y, x + width, y + height, dashLength, gapLength);
+  }
+
+  /**
+   * Draw a dashed line
+   */
+  drawDashedLine(x1, y1, x2, y2, dashLength, gapLength) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const unitX = dx / distance;
+    const unitY = dy / distance;
+
+    let currentDist = 0;
+    let drawing = true;
+
+    while (currentDist < distance) {
+      const segmentLength = drawing ? dashLength : gapLength;
+      const endDist = Math.min(currentDist + segmentLength, distance);
+
+      if (drawing) {
+        const startX = x1 + unitX * currentDist;
+        const startY = y1 + unitY * currentDist;
+        const endX = x1 + unitX * endDist;
+        const endY = y1 + unitY * endDist;
+
+        this.highlightLayer.beginPath();
+        this.highlightLayer.moveTo(startX, startY);
+        this.highlightLayer.lineTo(endX, endY);
+        this.highlightLayer.strokePath();
+      }
+
+      currentDist = endDist;
+      drawing = !drawing;
+    }
+  }
+
+  /**
    * Register with HUD camera system
    */
   registerWithHUD(hud) {
     if (hud) {
       hud.uiElements.push(this.background);
       hud.uiElements.push(this.staticLayer);
+      hud.uiElements.push(this.highlightLayer);
       hud.uiElements.push(this.dynamicLayer);
 
       // Make main camera ignore minimap
       this.scene.cameras.main.ignore([
         this.background,
         this.staticLayer,
+        this.highlightLayer,
         this.dynamicLayer
       ]);
     }
@@ -207,6 +340,7 @@ export class Minimap {
     this.scene.scale.off('resize', this.updatePosition, this);
     this.background.destroy();
     this.staticLayer.destroy();
+    this.highlightLayer.destroy();
     this.dynamicLayer.destroy();
   }
 }
