@@ -249,11 +249,21 @@ export class Player {
       }
 
       // Gift is available when near a valid target
+      // Rats and pets can receive cooked or uncooked body parts
+      // Humans and cops can only receive cooked body parts
+      const nearbyRat = this.findNearbyRat();
       const nearbyPet = this.findNearbyPet();
       const nearbyHuman = this.carriedBodyPart.isCooked ? this.findNearbyHuman() : null;
       const nearbyCop = this.carriedBodyPart.isCooked ? this.findNearbyCop() : null;
 
-      if (nearbyPet) {
+      if (nearbyRat) {
+        actions.push({
+          name: 'Gift',
+          key: 'G',
+          keyCode: Phaser.Input.Keyboard.KeyCodes.G,
+          callback: () => this.giftBodyPartToRat(nearbyRat)
+        });
+      } else if (nearbyPet) {
         actions.push({
           name: 'Gift',
           key: 'G',
@@ -341,7 +351,14 @@ export class Player {
 
     // If carrying a body part, check for nearby targets to gift
     if (this.carriedBodyPart) {
-      // Check for nearby pet
+      // Check for nearby rat (cooked or uncooked)
+      const nearbyRat = this.findNearbyRat();
+      if (nearbyRat) {
+        this.giftBodyPartToRat(nearbyRat);
+        return;
+      }
+
+      // Check for nearby pet (cooked or uncooked)
       const nearbyPet = this.findNearbyPet();
       if (nearbyPet) {
         this.giftToPet(nearbyPet);
@@ -957,6 +974,26 @@ export class Player {
 
     // Show notification
     this.scene.showNotification('yes, my sweet dear, munch! munch! munch!!');
+
+    // Destroy the body part
+    if (this.carriedBodyPartSprite) {
+      this.carriedBodyPartSprite.destroy();
+      this.carriedBodyPartSprite = null;
+    }
+    this.carriedBodyPart = null;
+  }
+
+  /**
+   * Gift body part to a rat (cooked or uncooked)
+   */
+  giftBodyPartToRat(rat) {
+    if (!this.carriedBodyPart || !rat) return;
+
+    // Rat eats the body part
+    this.spawnMunchingEffect(rat.sprite.x, rat.sprite.y);
+
+    // Show notification
+    this.scene.showNotification('the little one feasts!');
 
     // Destroy the body part
     if (this.carriedBodyPartSprite) {
