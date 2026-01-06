@@ -65,6 +65,58 @@ export class HUD {
     this.playAgainText.setVisible(false);
     this.uiElements.push(this.playAgainText);
 
+    // Win screen background
+    this.winBg = scene.add.rectangle(0, 0, 400, 380, 0x000000, 0.9);
+    this.winBg.setScrollFactor(0);
+    this.winBg.setDepth(1001);
+    this.winBg.setVisible(false);
+    this.uiElements.push(this.winBg);
+
+    // Win title text
+    this.winTitle = scene.add.text(0, 0, 'YOU WIN!', {
+      fontSize: '36px',
+      fontFamily: 'monospace',
+      color: '#ffcc00',
+      stroke: '#000000',
+      strokeThickness: 4
+    });
+    this.winTitle.setOrigin(0.5, 0.5);
+    this.winTitle.setScrollFactor(0);
+    this.winTitle.setDepth(1002);
+    this.winTitle.setVisible(false);
+    this.uiElements.push(this.winTitle);
+
+    // Win subtitle text
+    this.winSubtitle = scene.add.text(0, 0, 'Your legacy is cemented in infamy.', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.winSubtitle.setOrigin(0.5, 0.5);
+    this.winSubtitle.setScrollFactor(0);
+    this.winSubtitle.setDepth(1002);
+    this.winSubtitle.setVisible(false);
+    this.uiElements.push(this.winSubtitle);
+
+    // Win gif will be created on demand (needs special loading)
+    this.winGif = null;
+
+    // Win play again button
+    this.winPlayAgain = scene.add.text(0, 0, '[ Play Again ]', {
+      fontSize: '18px',
+      fontFamily: 'monospace',
+      color: '#00ff00',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.winPlayAgain.setOrigin(0.5, 0.5);
+    this.winPlayAgain.setScrollFactor(0);
+    this.winPlayAgain.setDepth(1002);
+    this.winPlayAgain.setVisible(false);
+    this.uiElements.push(this.winPlayAgain);
+
     // Store scene reference for later use
     this.sceneRef = scene;
 
@@ -224,6 +276,9 @@ export class HUD {
     // Clean up when scene shuts down (e.g., on restart)
     scene.events.on('shutdown', this.destroy, this);
 
+    // Listen for notoriety changes to update display
+    scene.events.on('notorietyChanged', this.updateNotorietyDisplay, this);
+
     // Debug menu setup
     this.setupDebugMenu();
   }
@@ -231,8 +286,11 @@ export class HUD {
   setupDebugMenu() {
     this.debugMenuVisible = false;
 
+    // Track selected objective template for debug picker
+    this.debugObjectiveIndex = 0;
+
     // Debug menu background
-    this.debugBg = this.scene.add.rectangle(200, 150, 250, 200, 0x000000, 0.9);
+    this.debugBg = this.scene.add.rectangle(200, 150, 350, 350, 0x000000, 0.9);
     this.debugBg.setScrollFactor(0);
     this.debugBg.setDepth(2000);
     this.debugBg.setVisible(false);
@@ -314,8 +372,94 @@ export class HUD {
     this.debugSanityUp.on('pointerout', () => this.debugSanityUp.setColor('#44ff44'));
     this.uiElements.push(this.debugSanityUp);
 
+    // Notoriety controls
+    this.debugNotorietyLabel = this.scene.add.text(210, 250, 'Notoriety Lvl:', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#ffffff'
+    });
+    this.debugNotorietyLabel.setScrollFactor(0);
+    this.debugNotorietyLabel.setDepth(2001);
+    this.debugNotorietyLabel.setVisible(false);
+    this.uiElements.push(this.debugNotorietyLabel);
+
+    // Notoriety value display
+    this.debugNotorietyValue = this.scene.add.text(320, 250, '1', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#ffcc44'
+    });
+    this.debugNotorietyValue.setScrollFactor(0);
+    this.debugNotorietyValue.setDepth(2001);
+    this.debugNotorietyValue.setVisible(false);
+    this.uiElements.push(this.debugNotorietyValue);
+
+    // Decrease notoriety button
+    this.debugNotorietyDown = this.scene.add.text(210, 275, '[ - ]', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#ff4444'
+    });
+    this.debugNotorietyDown.setScrollFactor(0);
+    this.debugNotorietyDown.setDepth(2001);
+    this.debugNotorietyDown.setVisible(false);
+    this.debugNotorietyDown.setInteractive({ useHandCursor: true });
+    this.debugNotorietyDown.on('pointerdown', () => {
+      if (this.scene.notorietySystem) {
+        const ns = this.scene.notorietySystem;
+        if (ns.level > 1) {
+          ns.level--;
+          ns.currentXP = 0;
+          this.scene.events.emit('notorietyChanged', {
+            level: ns.level,
+            currentXP: ns.currentXP,
+            totalXP: ns.totalXP
+          });
+          this.updateDebugMenu();
+          this.updateNotorietyDisplay();
+        }
+      }
+    });
+    this.debugNotorietyDown.on('pointerover', () => this.debugNotorietyDown.setColor('#ff8888'));
+    this.debugNotorietyDown.on('pointerout', () => this.debugNotorietyDown.setColor('#ff4444'));
+    this.uiElements.push(this.debugNotorietyDown);
+
+    // Increase notoriety button
+    this.debugNotorietyUp = this.scene.add.text(260, 275, '[ + ]', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#44ff44'
+    });
+    this.debugNotorietyUp.setScrollFactor(0);
+    this.debugNotorietyUp.setDepth(2001);
+    this.debugNotorietyUp.setVisible(false);
+    this.debugNotorietyUp.setInteractive({ useHandCursor: true });
+    this.debugNotorietyUp.on('pointerdown', () => {
+      if (this.scene.notorietySystem) {
+        const ns = this.scene.notorietySystem;
+        if (ns.level < ns.maxLevel) {
+          ns.level++;
+          ns.currentXP = 0;
+          this.scene.events.emit('notorietyChanged', {
+            level: ns.level,
+            currentXP: ns.currentXP,
+            totalXP: ns.totalXP
+          });
+          // Check for level 10 to trigger the special objective
+          if (ns.level === ns.maxLevel) {
+            this.scene.events.emit('notorietyLevelUp', { level: ns.level });
+          }
+          this.updateDebugMenu();
+          this.updateNotorietyDisplay();
+        }
+      }
+    });
+    this.debugNotorietyUp.on('pointerover', () => this.debugNotorietyUp.setColor('#88ff88'));
+    this.debugNotorietyUp.on('pointerout', () => this.debugNotorietyUp.setColor('#44ff44'));
+    this.uiElements.push(this.debugNotorietyUp);
+
     // Trigger "Lose It" button
-    this.debugLoseIt = this.scene.add.text(210, 250, '[ Trigger Lose It ]', {
+    this.debugLoseIt = this.scene.add.text(210, 310, '[ Trigger Lose It ]', {
       fontSize: '12px',
       fontFamily: 'monospace',
       color: '#ff8800'
@@ -338,8 +482,82 @@ export class HUD {
     this.debugLoseIt.on('pointerout', () => this.debugLoseIt.setColor('#ff8800'));
     this.uiElements.push(this.debugLoseIt);
 
+    // Objective picker section
+    this.debugObjectiveLabel = this.scene.add.text(210, 345, 'Daily Objective:', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#ffffff'
+    });
+    this.debugObjectiveLabel.setScrollFactor(0);
+    this.debugObjectiveLabel.setDepth(2001);
+    this.debugObjectiveLabel.setVisible(false);
+    this.uiElements.push(this.debugObjectiveLabel);
+
+    // Previous objective button
+    this.debugObjectivePrev = this.scene.add.text(210, 370, '[ < ]', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#8888ff'
+    });
+    this.debugObjectivePrev.setScrollFactor(0);
+    this.debugObjectivePrev.setDepth(2001);
+    this.debugObjectivePrev.setVisible(false);
+    this.debugObjectivePrev.setInteractive({ useHandCursor: true });
+    this.debugObjectivePrev.on('pointerdown', () => {
+      this.cycleDebugObjective(-1);
+    });
+    this.debugObjectivePrev.on('pointerover', () => this.debugObjectivePrev.setColor('#aaaaff'));
+    this.debugObjectivePrev.on('pointerout', () => this.debugObjectivePrev.setColor('#8888ff'));
+    this.uiElements.push(this.debugObjectivePrev);
+
+    // Objective name display
+    this.debugObjectiveName = this.scene.add.text(260, 370, 'Loading...', {
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      color: '#aa66ff',
+      wordWrap: { width: 220 }
+    });
+    this.debugObjectiveName.setScrollFactor(0);
+    this.debugObjectiveName.setDepth(2001);
+    this.debugObjectiveName.setVisible(false);
+    this.uiElements.push(this.debugObjectiveName);
+
+    // Next objective button
+    this.debugObjectiveNext = this.scene.add.text(500, 370, '[ > ]', {
+      fontSize: '14px',
+      fontFamily: 'monospace',
+      color: '#8888ff'
+    });
+    this.debugObjectiveNext.setScrollFactor(0);
+    this.debugObjectiveNext.setDepth(2001);
+    this.debugObjectiveNext.setVisible(false);
+    this.debugObjectiveNext.setInteractive({ useHandCursor: true });
+    this.debugObjectiveNext.on('pointerdown', () => {
+      this.cycleDebugObjective(1);
+    });
+    this.debugObjectiveNext.on('pointerover', () => this.debugObjectiveNext.setColor('#aaaaff'));
+    this.debugObjectiveNext.on('pointerout', () => this.debugObjectiveNext.setColor('#8888ff'));
+    this.uiElements.push(this.debugObjectiveNext);
+
+    // Apply objective button
+    this.debugObjectiveApply = this.scene.add.text(210, 405, '[ Set This Objective ]', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#44ff88'
+    });
+    this.debugObjectiveApply.setScrollFactor(0);
+    this.debugObjectiveApply.setDepth(2001);
+    this.debugObjectiveApply.setVisible(false);
+    this.debugObjectiveApply.setInteractive({ useHandCursor: true });
+    this.debugObjectiveApply.on('pointerdown', () => {
+      this.applyDebugObjective();
+    });
+    this.debugObjectiveApply.on('pointerover', () => this.debugObjectiveApply.setColor('#88ffaa'));
+    this.debugObjectiveApply.on('pointerout', () => this.debugObjectiveApply.setColor('#44ff88'));
+    this.uiElements.push(this.debugObjectiveApply);
+
     // Close hint
-    this.debugCloseHint = this.scene.add.text(210, 320, 'Press Shift+D to close', {
+    this.debugCloseHint = this.scene.add.text(210, 465, 'Press Shift+D to close', {
       fontSize: '10px',
       fontFamily: 'monospace',
       color: '#888888'
@@ -353,7 +571,11 @@ export class HUD {
     this.scene.cameras.main.ignore([
       this.debugBg, this.debugTitle, this.debugSanityLabel,
       this.debugSanityValue, this.debugSanityDown, this.debugSanityUp,
-      this.debugLoseIt, this.debugCloseHint
+      this.debugNotorietyLabel, this.debugNotorietyValue,
+      this.debugNotorietyDown, this.debugNotorietyUp,
+      this.debugLoseIt, this.debugCloseHint,
+      this.debugObjectiveLabel, this.debugObjectivePrev, this.debugObjectiveName,
+      this.debugObjectiveNext, this.debugObjectiveApply
     ]);
 
     // Setup Shift+D keyboard shortcut
@@ -376,8 +598,17 @@ export class HUD {
     this.debugSanityValue.setVisible(visible);
     this.debugSanityDown.setVisible(visible);
     this.debugSanityUp.setVisible(visible);
+    this.debugNotorietyLabel.setVisible(visible);
+    this.debugNotorietyValue.setVisible(visible);
+    this.debugNotorietyDown.setVisible(visible);
+    this.debugNotorietyUp.setVisible(visible);
     this.debugLoseIt.setVisible(visible);
     this.debugCloseHint.setVisible(visible);
+    this.debugObjectiveLabel.setVisible(visible);
+    this.debugObjectivePrev.setVisible(visible);
+    this.debugObjectiveName.setVisible(visible);
+    this.debugObjectiveNext.setVisible(visible);
+    this.debugObjectiveApply.setVisible(visible);
 
     if (visible) {
       this.updateDebugMenu();
@@ -392,8 +623,118 @@ export class HUD {
     this.debugSanityValue.setText(sanity.toString());
     this.debugSanityValue.setColor(colorHex);
 
+    // Update notoriety display
+    const notorietyLevel = this.scene.notorietySystem?.level ?? 1;
+    const maxLevel = this.scene.notorietySystem?.maxLevel ?? 10;
+    this.debugNotorietyValue.setText(`${notorietyLevel}/${maxLevel}`);
+
     const isLosingIt = this.scene.sanitySystem?.isLosingIt || false;
     this.debugLoseIt.setText(isLosingIt ? '[ Stop Losing It ]' : '[ Trigger Lose It ]');
+
+    // Update objective picker display
+    this.updateDebugObjectiveDisplay();
+  }
+
+  /**
+   * Get list of objective templates from the daily objective bank
+   */
+  getObjectiveTemplates() {
+    const objectiveSystem = this.scene.objectiveSystem;
+    if (!objectiveSystem?.dailyObjectiveBank) return [];
+    return objectiveSystem.dailyObjectiveBank.templates || [];
+  }
+
+  /**
+   * Cycle through available objective templates
+   */
+  cycleDebugObjective(direction) {
+    const templates = this.getObjectiveTemplates();
+    if (templates.length === 0) return;
+
+    this.debugObjectiveIndex += direction;
+    if (this.debugObjectiveIndex < 0) {
+      this.debugObjectiveIndex = templates.length - 1;
+    } else if (this.debugObjectiveIndex >= templates.length) {
+      this.debugObjectiveIndex = 0;
+    }
+
+    this.updateDebugObjectiveDisplay();
+  }
+
+  /**
+   * Update the objective name display
+   */
+  updateDebugObjectiveDisplay() {
+    const templates = this.getObjectiveTemplates();
+    if (templates.length === 0) {
+      this.debugObjectiveName.setText('No templates');
+      return;
+    }
+
+    const template = templates[this.debugObjectiveIndex];
+    // Generate preview of the objective to show the title
+    const preview = template.generate();
+    const indexDisplay = `(${this.debugObjectiveIndex + 1}/${templates.length})`;
+    this.debugObjectiveName.setText(`${indexDisplay} ${preview.title}`);
+  }
+
+  /**
+   * Apply the selected objective template as the current daily objective
+   */
+  applyDebugObjective() {
+    const objectiveSystem = this.scene.objectiveSystem;
+    if (!objectiveSystem?.dailyObjectiveBank) {
+      this.showNotification('No objective system available', 2000);
+      return;
+    }
+
+    const templates = this.getObjectiveTemplates();
+    if (templates.length === 0) return;
+
+    const template = templates[this.debugObjectiveIndex];
+
+    // Clear current objectives and location highlights
+    objectiveSystem.clearLocationHighlights();
+    objectiveSystem.objectives = objectiveSystem.objectives.filter(obj => !obj.isDaily);
+
+    // Generate the objective using the template
+    const generated = template.generate();
+    const objective = {
+      id: objectiveSystem.nextId++,
+      templateId: generated.templateId || template.id,
+      title: generated.title,
+      description: generated.description,
+      rewards: generated.rewardText,
+      penalty: generated.penaltyText,
+      xp: generated.xp || 0,
+      isDaily: true,
+      isComplete: false,
+      isFailed: false,
+      action: generated.action || null,
+      targetType: generated.targetType || null,
+      bodyPart: generated.bodyPart || null,
+      objectType: generated.objectType || null,
+      location: generated.location || null,
+      highlightLocation: generated.highlightLocation || null,
+      highlightRitualSite: generated.highlightRitualSite || false,
+      killCount: generated.killCount || null,
+      requiresPrisoner: generated.requiresPrisoner || false,
+      steps: generated.steps ? generated.steps.map(s => ({ ...s })) : null
+    };
+
+    objectiveSystem.objectives.push(objective);
+    objectiveSystem.currentDailyObjective = objective;
+
+    // Set up location highlighting
+    objectiveSystem.updateLocationHighlights();
+
+    // Set up objective-specific actions (Fripple, Pizzle, etc.)
+    objectiveSystem.setupObjectiveActions();
+
+    // Update widget
+    objectiveSystem.updateWidget();
+
+    this.showNotification(`Debug: Set objective to "${objective.title}"`, 3000);
   }
 
   // Call this method when adding new game objects to make UI camera ignore them
@@ -420,6 +761,15 @@ export class HUD {
     this.gameOverBg.setPosition(width / 2, height / 2);
     this.gameOverText.setPosition(width / 2, height / 2 - 20);
     this.playAgainText.setPosition(width / 2, height / 2 + 30);
+
+    // Win screen elements (center)
+    this.winBg.setPosition(width / 2, height / 2);
+    this.winTitle.setPosition(width / 2, height / 2 - 140);
+    this.winSubtitle.setPosition(width / 2, height / 2 + 100);
+    this.winPlayAgain.setPosition(width / 2, height / 2 + 140);
+
+    // Update win gif position if it exists
+    this.updateWinGifPosition();
 
     // Knife icon (bottom right) - 2x bigger, so offset by 36 instead of 20
     this.knifeX = width - padding - 36;
@@ -924,12 +1274,113 @@ export class HUD {
     this.updatePositions();
   }
 
+  showWin() {
+    this.winBg.setVisible(true);
+    this.winTitle.setVisible(true);
+    this.winSubtitle.setVisible(true);
+    this.winPlayAgain.setVisible(true);
+
+    // Load and display the win gif using a DOM element overlay
+    this.createWinGif();
+
+    // Remove existing listeners if any
+    this.winPlayAgain.removeAllListeners();
+    this.winPlayAgain.removeInteractive();
+
+    // Make the play again button interactive
+    const bounds = this.winPlayAgain.getBounds();
+    this.winPlayAgain.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(
+        -bounds.width / 2 - 10,
+        -bounds.height / 2 - 5,
+        bounds.width + 20,
+        bounds.height + 10
+      ),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true
+    });
+
+    // Add event listeners
+    this.winPlayAgain.on('pointerover', () => {
+      this.winPlayAgain.setColor('#ffffff');
+    });
+    this.winPlayAgain.on('pointerout', () => {
+      this.winPlayAgain.setColor('#00ff00');
+    });
+    this.winPlayAgain.on('pointerdown', () => {
+      // Clean up gif before restart
+      if (this.winGifElement) {
+        this.winGifElement.remove();
+        this.winGifElement = null;
+      }
+      this.sceneRef.scene.restart();
+    });
+
+    this.updatePositions();
+  }
+
+  createWinGif() {
+    // Create a DOM element for the GIF since Phaser doesn't natively support animated GIFs
+    const canvas = this.scene.game.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+
+    // Create image element
+    const gifElement = document.createElement('img');
+    gifElement.src = 'win.gif';
+    gifElement.style.position = 'absolute';
+    gifElement.style.width = '200px';
+    gifElement.style.height = 'auto';
+    gifElement.style.maxHeight = '150px';
+    gifElement.style.objectFit = 'contain';
+    gifElement.style.zIndex = '1000';
+    gifElement.style.pointerEvents = 'none';
+    gifElement.style.borderRadius = '8px';
+    gifElement.style.border = '2px solid #ffcc00';
+
+    // Handle image load error gracefully
+    gifElement.onerror = () => {
+      console.log('Win gif not found - using placeholder');
+      gifElement.style.display = 'none';
+    };
+
+    // Position will be updated in updatePositions
+    document.body.appendChild(gifElement);
+    this.winGifElement = gifElement;
+
+    // Update position immediately
+    this.updateWinGifPosition();
+  }
+
+  updateWinGifPosition() {
+    if (!this.winGifElement) return;
+
+    const canvas = this.scene.game.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+    const width = this.scene.scale.width;
+    const height = this.scene.scale.height;
+
+    // Calculate the position - center horizontally, positioned in upper part of popup
+    const gifWidth = 200;
+    const gifHeight = 150;
+    const centerX = canvasRect.left + (canvasRect.width / 2) - (gifWidth / 2);
+    const centerY = canvasRect.top + (canvasRect.height / 2) - 50;
+
+    this.winGifElement.style.left = `${centerX}px`;
+    this.winGifElement.style.top = `${centerY}px`;
+  }
+
   destroy() {
     this.scene.scale.off('resize', this.updatePositions, this);
     this.scene.events.off('update', this.updateFrame, this);
     this.scene.events.off('shutdown', this.destroy, this);
+    this.scene.events.off('notorietyChanged', this.updateNotorietyDisplay, this);
     if (this.uiCamera) {
       this.scene.cameras.remove(this.uiCamera);
+    }
+    // Clean up win gif DOM element
+    if (this.winGifElement) {
+      this.winGifElement.remove();
+      this.winGifElement = null;
     }
   }
 }

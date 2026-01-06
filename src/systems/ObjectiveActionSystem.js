@@ -184,27 +184,63 @@ export class ObjectiveActionSystem {
     const availableActions = [];
     const context = { scene: this.scene };
 
+    // Create a corpse-like object for constraint matching
+    const corpseEntity = {
+      isCorpse: true,
+      originalEntity: corpse.entity || corpse
+    };
+
     for (const action of this.actions.values()) {
       if (!action.isActive) continue;
 
+      let canUse = false;
+
       // Leave Letter only works on corpses
       if (action.type === ObjectiveActionType.LEAVE_LETTER) {
+        canUse = true;
         // If there's an entity constraint, check it
-        if (action.entityConstraint) {
-          // Create a corpse-like object for matching
-          const corpseEntity = {
-            isCorpse: true,
-            originalEntity: corpse.entity || corpse
-          };
-          if (!action.entityConstraint.matches(corpseEntity, context)) continue;
+        if (action.entityConstraint && !action.entityConstraint.matches(corpseEntity, context)) {
+          canUse = false;
         }
+      }
 
+      // Mootiti can work on corpses (check entity constraint and with clause)
+      if (action.type === ObjectiveActionType.MOOTITI) {
+        // Mootiti works on corpses - check if entityConstraint is CORPSE or not set
+        const targetCorpse = !action.entityConstraint || action.entityConstraint.type === EntityType.CORPSE;
+        if (targetCorpse) {
+          canUse = true;
+          // Also check the 'with' clause
+          if (action.withObject && !this.checkWithClause(action.withObject)) {
+            canUse = false;
+          }
+        }
+      }
+
+      // Fripple, Pizzle, Jally can work on corpses if their constraint is CORPSE type
+      if (action.type === ObjectiveActionType.FRIPPLE ||
+          action.type === ObjectiveActionType.PIZZLE ||
+          action.type === ObjectiveActionType.JALLY) {
+        if (action.entityConstraint && action.entityConstraint.type === EntityType.CORPSE) {
+          canUse = true;
+          // For Pizzle/Jally, also check body part constraint
+          if ((action.type === ObjectiveActionType.PIZZLE || action.type === ObjectiveActionType.JALLY) &&
+              action.bodyPartConstraint) {
+            const carriedBodyPart = this.scene.player?.carriedBodyPart;
+            if (!carriedBodyPart || !action.bodyPartConstraint.matches(carriedBodyPart, context)) {
+              canUse = false;
+            }
+          }
+        }
+      }
+
+      if (canUse) {
         const keyBinding = action.getKeyBinding();
         availableActions.push({
           name: action.displayName,
           key: keyBinding.key,
           keyCode: keyBinding.keyCode,
-          callback: () => this.executeAction(action, corpse),
+          callback: () => this.executeAction(action, { ...corpse, isCorpse: true }),
           isObjectiveAction: true,
           objectiveActionId: action.id
         });
@@ -220,6 +256,16 @@ export class ObjectiveActionSystem {
   canTargetEntity(action, entity, context) {
     // For Leave Letter, use getActionsForCorpse instead
     if (action.type === ObjectiveActionType.LEAVE_LETTER) {
+      return false; // Handled separately
+    }
+
+    // Mootiti always targets corpses - handled by getActionsForCorpse
+    if (action.type === ObjectiveActionType.MOOTITI) {
+      return false; // Handled separately
+    }
+
+    // Actions with CORPSE entity constraint are handled by getActionsForCorpse
+    if (action.entityConstraint && action.entityConstraint.type === EntityType.CORPSE) {
       return false; // Handled separately
     }
 
@@ -268,11 +314,11 @@ export class ObjectiveActionSystem {
     switch (withObject) {
       case WithObject.RAT:
         // Must be carrying a rat
-        return player.carriedRat !== null;
+        return !!player.carriedRat;
 
       case WithObject.LAMP:
         // Must be carrying a lamp
-        return player.carriedLamp !== null;
+        return !!player.carriedLamp;
 
       case WithObject.KNIFE:
         // Knife is always available (player always has it)
@@ -315,7 +361,8 @@ export class ObjectiveActionSystem {
       actionType: action.type,
       actionId: action.id,
       objectiveId: action.objectiveId,
-      targetEntity: targetEntity
+      targetEntity: targetEntity,
+      withObject: action.withObject || null  // Include for Mootiti tracking
     });
   }
 

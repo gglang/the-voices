@@ -258,6 +258,17 @@ export class CorpseManager {
 
       // Blood splatter effect
       this.scene.spawnBloodSplatter(corpseData.sprite.x, corpseData.sprite.y);
+
+      // Emit event for objective tracking
+      this.scene.events.emit('bodyPartRemoved', {
+        bodyPart: bodyPartInfo,
+        partId: partId,
+        fromCorpse: true,
+        fromPrisoner: false,
+        corpseData: corpseData,
+        race: corpseData.race,
+        age: corpseData.age
+      });
     }
   }
 

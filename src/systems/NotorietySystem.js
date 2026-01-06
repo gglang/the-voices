@@ -90,6 +90,13 @@ export class NotorietySystem {
 
     // Check for level up
     this.checkLevelUp();
+
+    // Emit event for HUD update
+    this.scene.events.emit('notorietyChanged', {
+      level: this.level,
+      currentXP: this.currentXP,
+      totalXP: this.totalXP
+    });
   }
 
   /**

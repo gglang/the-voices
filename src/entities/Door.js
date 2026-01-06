@@ -158,6 +158,8 @@ export class Door {
     // Check humans
     for (const human of this.scene.humans) {
       if (!human.isAlive) continue;
+      // Prisoners cannot witness crimes or alert cops
+      if (human.isPrisoner) continue;
 
       // If in same building, they heard/saw it
       if (human.homeBuilding?.id === this.buildingId) {

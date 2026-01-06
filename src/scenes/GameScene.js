@@ -204,6 +204,39 @@ export class GameScene extends Phaser.Scene {
 
     // Add initial daily objective
     this.objectiveSystem.addDailyObjective();
+
+    // Listen for max notoriety to add special "Get Caught" objective
+    this.events.on('notorietyLevelUp', (data) => {
+      if (data.level === this.notorietySystem?.maxLevel) {
+        this.addGetCaughtObjective();
+      }
+    });
+  }
+
+  /**
+   * Add the special "Get Caught" objective when player reaches max notoriety
+   */
+  addGetCaughtObjective() {
+    // Create the special win objective
+    const getCaughtObjective = {
+      id: 9999, // Special ID for this objective
+      title: 'GET CAUGHT',
+      description: 'You have achieved maximum notoriety. Let the cops catch you to cement your legacy.',
+      rewards: 'VICTORY',
+      penalty: '',
+      xp: 0,
+      isDaily: false,
+      isComplete: false,
+      isFailed: false,
+      isWinObjective: true
+    };
+
+    // Add to objective system
+    this.objectiveSystem.objectives.push(getCaughtObjective);
+    this.objectiveSystem.updateWidget();
+
+    // Show notification
+    this.showNotification('MAXIMUM NOTORIETY! Your legacy awaits...');
   }
 
   /**
@@ -924,6 +957,13 @@ export class GameScene extends Phaser.Scene {
 
   triggerGameOver() {
     if (this.isGameOver) return;
+
+    // Check if player is at max notoriety - this is a WIN!
+    if (this.notorietySystem?.isMaxLevel()) {
+      this.triggerWin();
+      return;
+    }
+
     this.isGameOver = true;
 
     this.player.disableControl();
@@ -942,6 +982,34 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.hud.showGameOver();
+  }
+
+  /**
+   * Trigger win condition - player got caught at max notoriety
+   */
+  triggerWin() {
+    if (this.isGameOver) return;
+    this.isGameOver = true;
+
+    this.player.disableControl();
+
+    // Show cage over player (they're caught)
+    const cage = this.add.image(this.player.sprite.x, this.player.sprite.y, 'cage');
+    cage.setDepth(DEPTH.CAGE);
+
+    if (this.hud) {
+      this.hud.ignoreGameObject(cage);
+    }
+
+    // Clear cop tints
+    this.police.forEach(cop => {
+      if (cop.sprite?.active) {
+        cop.sprite.clearTint();
+      }
+    });
+
+    // Show the win screen!
+    this.hud.showWin();
   }
 
   /**

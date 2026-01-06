@@ -249,9 +249,21 @@ export class Human {
     this.isWaiting = false;
     this.currentPath = [];
     this.pathIndex = 0;
+    this.isFollowing = true;  // Track for objective tracking
+    this.wasFollowing = true;  // Persistent flag - never reset to false
 
     // Show follow icon
     this.showFollowIcon();
+
+    // Emit event for objective tracking
+    this.scene.events.emit('humanStartedFollowing', {
+      human: this,
+      race: this.race,
+      age: this.age,
+      gender: this.gender,
+      startX: this.followStartX,
+      startY: this.followStartY
+    });
   }
 
   showFollowIcon() {
@@ -363,6 +375,7 @@ export class Human {
   stopFollowing() {
     this.state = HumanState.CONFUSED;
     this.sprite.setVelocity(0, 0);
+    this.isFollowing = false;  // Track for objective tracking
 
     // Hide follow icon
     this.hideFollowIcon();
@@ -648,6 +661,8 @@ export class Human {
 
   checkForBrokenDoors() {
     if (!this.scene.doors) return;
+    // Prisoners cannot alert or react to crimes
+    if (this.isPrisoner) return;
 
     for (const door of this.scene.doors) {
       if (door.state !== 'broken' || door.hasBeenReported) continue;
@@ -883,6 +898,8 @@ export class Human {
 
   checkForCorpses() {
     if (this.hasSeenCorpse) return;
+    // Prisoners cannot alert or react to crimes
+    if (this.isPrisoner) return;
 
     for (const corpse of this.scene.corpses) {
       // Skip picked up or already investigated corpses
@@ -923,6 +940,8 @@ export class Human {
    */
   checkForPlayerCarryingEvidence() {
     if (this.hasSeenCorpse) return;
+    // Prisoners cannot alert or react to crimes
+    if (this.isPrisoner) return;
 
     const player = this.scene.player;
     if (!player?.sprite) return;
@@ -963,6 +982,9 @@ export class Human {
    * React to seeing player carrying evidence (corpse, prisoner, or uncooked body part)
    */
   reactToEvidence() {
+    // Prisoners cannot alert or react to crimes
+    if (this.isPrisoner) return;
+
     this.hasSeenCorpse = true;
     this.scene.alertCopsToDisturbance(this.sprite.x, this.sprite.y);
     this.scene.identifyPlayer(this.sprite);
@@ -970,6 +992,8 @@ export class Human {
 
   checkForIllegalActivity() {
     if (this.scene.playerIdentified) return;
+    // Prisoners cannot alert or react to crimes
+    if (this.isPrisoner) return;
 
     const player = this.scene.player;
     if (!player?.sprite) return;
@@ -997,6 +1021,7 @@ export class Human {
   beImprisoned(cage) {
     this.state = HumanState.IMPRISONED;
     this.cage = cage;
+    this.isPrisoner = true;
     this.sprite.setVelocity(0, 0);
 
     // Hide follow icon and trust meter
@@ -1017,6 +1042,7 @@ export class Human {
   beReleased() {
     this.state = HumanState.FLEEING;
     this.cage = null;
+    this.isPrisoner = false;
     this.misery = 0;
     this.isBeingCarried = false;
     this.hideMiseryMeter();
@@ -1321,6 +1347,19 @@ export class Human {
 
     const corpseTextureKey = `corpse_${this.race.name}_${this.gender}_${this.age}`;
     this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, false, this.race, this.gender, this.age);
+
+    // Emit kill event for objective tracking
+    this.scene.events.emit('humanKilled', {
+      victim: this,
+      x: deathX,
+      y: deathY,
+      race: this.race,
+      age: this.age,
+      gender: this.gender,
+      isPrisoner: this.isPrisoner || false,
+      wasFollowing: this.wasFollowing || this.isFollowing || false,
+      corpse: this.corpseData
+    });
 
     // Transfer removed parts to corpse
     if (this.corpseData) {

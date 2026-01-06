@@ -1,7 +1,7 @@
 {
-  "name": "serial-killer-game",
+  "name": "the-voices-made-me-do-it",
   "version": "0.1.0",
-  "description": "A pixel art top-down exploration game",
+  "description": "The Voices Made Me Do It - A pixel art top-down game",
   "type": "module",
   "scripts": {
     "dev": "vite",

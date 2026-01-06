@@ -135,6 +135,7 @@ export class ObjectivesWidget {
     this.objectiveTexts.forEach(item => {
       if (item.hitArea) item.hitArea.destroy();
       if (item.rowBg) item.rowBg.destroy();
+      if (item.checkbox) item.checkbox.destroy();
       if (item.text) item.text.destroy();
       if (item.infoIcon) item.infoIcon.destroy();
     });
@@ -184,15 +185,20 @@ export class ObjectivesWidget {
         hitArea.setInteractive({ useHandCursor: true });
         this.container.add(hitArea);
 
+        // Checkbox for completion status
+        const checkbox = this.scene.add.graphics();
+        this.drawCheckbox(checkbox, 20, y + rowHeight / 2, obj.isComplete, obj.isFailed);
+        this.container.add(checkbox);
+
         // Prefix with (daily) if applicable
         const prefix = obj.isDaily ? '(daily) ' : '';
-        const displayText = prefix + this.truncateText(obj.title, 28);
+        const displayText = prefix + this.truncateText(obj.title, 24);
 
-        // Objective text
-        const text = this.scene.add.text(16, y + 6, displayText, {
+        // Objective text (shifted right for checkbox)
+        const text = this.scene.add.text(40, y + 6, displayText, {
           fontSize: '18px',
           fontFamily: 'monospace',
-          color: obj.isComplete ? '#44aa44' : '#cccccc',
+          color: obj.isComplete ? '#44aa44' : (obj.isFailed ? '#aa4444' : '#cccccc'),
           stroke: '#000000',
           strokeThickness: 2
         });
@@ -216,17 +222,71 @@ export class ObjectivesWidget {
           rowBg.clear();
           rowBg.fillStyle(0x6633aa, 0.3);
           rowBg.fillRoundedRect(8, y, this.width - 16, rowHeight, 4);
-          text.setColor(obj.isComplete ? '#66ff66' : '#ffffff');
+          text.setColor(obj.isComplete ? '#66ff66' : (obj.isFailed ? '#ff6666' : '#ffffff'));
           infoIcon.setColor('#ffff00');
         });
         hitArea.on('pointerout', () => {
           rowBg.clear();
-          text.setColor(obj.isComplete ? '#44aa44' : '#cccccc');
+          text.setColor(obj.isComplete ? '#44aa44' : (obj.isFailed ? '#aa4444' : '#cccccc'));
           infoIcon.setColor('#888888');
         });
 
-        this.objectiveTexts.push({ hitArea, rowBg, text, infoIcon });
+        this.objectiveTexts.push({ hitArea, rowBg, checkbox, text, infoIcon });
       });
+    }
+  }
+
+  /**
+   * Draw a checkbox
+   * @param {Phaser.GameObjects.Graphics} graphics
+   * @param {number} x - Center X
+   * @param {number} y - Center Y
+   * @param {boolean} isComplete
+   * @param {boolean} isFailed
+   */
+  drawCheckbox(graphics, x, y, isComplete, isFailed = false) {
+    const size = 12;
+    const half = size / 2;
+
+    graphics.clear();
+
+    if (isComplete) {
+      // Filled green checkbox with checkmark
+      graphics.fillStyle(0x44aa44, 1);
+      graphics.fillRect(x - half, y - half, size, size);
+      graphics.lineStyle(2, 0x44aa44, 1);
+      graphics.strokeRect(x - half, y - half, size, size);
+
+      // Draw checkmark
+      graphics.lineStyle(2, 0xffffff, 1);
+      graphics.beginPath();
+      graphics.moveTo(x - 4, y);
+      graphics.lineTo(x - 1, y + 3);
+      graphics.lineTo(x + 4, y - 3);
+      graphics.strokePath();
+    } else if (isFailed) {
+      // Red X for failed
+      graphics.fillStyle(0x442222, 1);
+      graphics.fillRect(x - half, y - half, size, size);
+      graphics.lineStyle(2, 0xaa4444, 1);
+      graphics.strokeRect(x - half, y - half, size, size);
+
+      // Draw X
+      graphics.lineStyle(2, 0xff4444, 1);
+      graphics.beginPath();
+      graphics.moveTo(x - 3, y - 3);
+      graphics.lineTo(x + 3, y + 3);
+      graphics.strokePath();
+      graphics.beginPath();
+      graphics.moveTo(x + 3, y - 3);
+      graphics.lineTo(x - 3, y + 3);
+      graphics.strokePath();
+    } else {
+      // Empty checkbox
+      graphics.fillStyle(0x222222, 1);
+      graphics.fillRect(x - half, y - half, size, size);
+      graphics.lineStyle(2, 0x666666, 1);
+      graphics.strokeRect(x - half, y - half, size, size);
     }
   }
 
@@ -263,6 +323,7 @@ export class ObjectivesWidget {
     this.objectiveTexts.forEach(item => {
       if (item.hitArea) item.hitArea.destroy();
       if (item.rowBg) item.rowBg.destroy();
+      if (item.checkbox) item.checkbox.destroy();
       if (item.text) item.text.destroy();
       if (item.infoIcon) item.infoIcon.destroy();
     });

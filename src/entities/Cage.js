@@ -87,6 +87,15 @@ export class Cage {
           });
         }
       }
+      // Feed action when player is carrying a body part
+      if (this.scene.player?.carriedBodyPart) {
+        actions.push({
+          name: 'Feed',
+          key: 'G',
+          keyCode: Phaser.Input.Keyboard.KeyCodes.G,
+          callback: () => this.feedPrisoner()
+        });
+      }
     } else {
       // Empty cage - check if player is carrying a prisoner
       if (this.scene.player?.carriedPrisoner) {
@@ -117,6 +126,16 @@ export class Cage {
 
     // Start periodic shiver effect
     this.startPrisonerShiver();
+
+    // Emit event for objective tracking
+    this.scene.events.emit('entityImprisoned', {
+      entity: entity,
+      cage: this,
+      race: entity.race,
+      age: entity.age,
+      gender: entity.gender,
+      wasFollowing: entity.isFollowing || entity.wasFollowing || true
+    });
 
     return true;
   }
@@ -318,11 +337,131 @@ export class Cage {
 
     const bodyPartInfo = this.prisoner.removeBodyPart(partId);
     if (bodyPartInfo) {
+      // Mark as prisoner skin if it's skin
+      if (partId === 'skin') {
+        bodyPartInfo.isPrisonerSkin = true;
+      }
+
       // Player picks up the body part
       this.scene.player.pickupBodyPart(bodyPartInfo);
 
       // Blood splatter effect
       this.scene.spawnBloodSplatter(this.prisoner.sprite.x, this.prisoner.sprite.y);
+
+      // Emit event for objective tracking
+      this.scene.events.emit('bodyPartRemoved', {
+        bodyPart: bodyPartInfo,
+        partId: partId,
+        fromCorpse: false,
+        fromPrisoner: true,
+        prisoner: this.prisoner,
+        race: this.prisoner.race,
+        age: this.prisoner.age
+      });
+    }
+  }
+
+  /**
+   * Feed a body part to the prisoner
+   */
+  feedPrisoner() {
+    if (!this.prisoner) return;
+
+    const player = this.scene.player;
+    if (!player?.carriedBodyPart) return;
+
+    const bodyPart = player.carriedBodyPart;
+    const partId = bodyPart.partId || bodyPart.bodyPartType || bodyPart.partType;
+    const isCooked = bodyPart.isCooked || false;
+
+    // Show feeding effect
+    this.spawnFeedingEffect();
+
+    // Creepy notification
+    const messages = [
+      '*forces meat down throat*',
+      '"eat... EAT..."',
+      '*muffled screaming*',
+      '"good... swallow it all..."',
+      '*prisoner gags*'
+    ];
+    const message = messages[Math.floor(Math.random() * messages.length)];
+    this.scene.showNotification(message);
+
+    // Increase prisoner misery
+    if (this.prisoner.increaseMisery) {
+      this.prisoner.increaseMisery(15);
+    }
+
+    // Emit event for objective tracking
+    this.scene.events.emit('bodyPartGifted', {
+      bodyPart: bodyPart,
+      partId: partId,
+      recipient: this.prisoner,
+      recipientType: 'prisoner',
+      isCooked: isCooked,
+      isPrisoner: true
+    });
+
+    // Destroy player's carried body part
+    if (player.carriedBodyPartSprite) {
+      player.carriedBodyPartSprite.destroy();
+      player.carriedBodyPartSprite = null;
+    }
+    player.carriedBodyPart = null;
+  }
+
+  /**
+   * Spawn feeding effect (drool, struggle)
+   */
+  spawnFeedingEffect() {
+    if (!this.prisoner?.sprite) return;
+
+    const x = this.prisoner.sprite.x;
+    const y = this.prisoner.sprite.y;
+
+    // Create drool droplets
+    for (let i = 0; i < 4; i++) {
+      const droplet = this.scene.add.ellipse(
+        x + Phaser.Math.Between(-8, 8),
+        y + Phaser.Math.Between(-4, 4),
+        Phaser.Math.Between(2, 4),
+        Phaser.Math.Between(3, 5),
+        0x88aacc,
+        0.8
+      );
+      droplet.setDepth(DEPTH.EFFECTS);
+
+      if (this.scene.hud) {
+        this.scene.hud.ignoreGameObject(droplet);
+      }
+
+      this.scene.tweens.add({
+        targets: droplet,
+        y: droplet.y + Phaser.Math.Between(10, 20),
+        alpha: 0,
+        duration: Phaser.Math.Between(300, 600),
+        delay: i * 80,
+        ease: 'Quad.easeIn',
+        onComplete: () => droplet.destroy()
+      });
+    }
+
+    // Make prisoner shake violently
+    if (this.prisoner.sprite) {
+      const originalX = this.prisoner.sprite.x;
+      this.scene.tweens.add({
+        targets: this.prisoner.sprite,
+        x: originalX + 2,
+        duration: 50,
+        yoyo: true,
+        repeat: 5,
+        onComplete: () => {
+          if (this.prisoner?.sprite) {
+            this.prisoner.sprite.x = originalX;
+          }
+        }
+      });
     }
   }
 

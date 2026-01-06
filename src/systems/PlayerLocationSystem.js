@@ -121,14 +121,17 @@ export class PlayerLocationSystem {
       };
     }
 
-    // Near Police Station: Within 5 tiles of police station
+    // Near Police Station: Within 5 tiles of police station edge
     if (this.townData.policeStation) {
       const police = this.townData.policeStation;
+      // Calculate radius from center that includes building + proximity distance
+      const buildingRadius = Math.max(police.width, police.height) / 2;
+      const totalRadius = buildingRadius + this.policeProximityTiles;
       this.locationBounds[LocationType.NEAR_POLICE_STATION] = {
         type: 'proximity',
         centerX: police.x + police.width / 2,
         centerY: police.y + police.height / 2,
-        radiusTiles: this.policeProximityTiles,
+        radiusTiles: totalRadius,
         // Also include inside the building
         buildingBounds: {
           x: police.x,

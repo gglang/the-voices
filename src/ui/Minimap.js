@@ -165,6 +165,9 @@ export class Minimap {
     // Draw location highlights
     this.drawLocationHighlights();
 
+    // Draw ritual site highlight if one is marked
+    this.drawRitualSiteHighlight();
+
     // Draw ritual sites
     this.staticLayer.fillStyle(MINIMAP.COLORS.RITUAL_SITE);
     const ritualSites = this.scene.ritualSystem?.getAll() || [];
@@ -194,6 +197,28 @@ export class Minimap {
       this.dynamicLayer.fillStyle(MINIMAP.COLORS.PLAYER);
       this.dynamicLayer.fillCircle(px, py, 3);
     }
+  }
+
+  /**
+   * Draw pulsing yellow highlight around the marked ritual site
+   */
+  drawRitualSiteHighlight() {
+    const objectiveSystem = this.scene.objectiveSystem;
+    if (!objectiveSystem) return;
+
+    const highlightedSite = objectiveSystem.getHighlightedRitualSite();
+    if (!highlightedSite) return;
+
+    // Calculate pulse alpha (oscillates between 0.3 and 0.8)
+    const pulseAlpha = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(this.pulseTime * Math.PI * this.pulseSpeed));
+    const borderColor = 0xffff00;  // Yellow
+
+    const sx = this.x + highlightedSite.x * this.scaleX;
+    const sy = this.y + highlightedSite.y * this.scaleY;
+    const radius = 8;  // Larger circle around the ritual site
+
+    this.highlightLayer.lineStyle(2, borderColor, pulseAlpha);
+    this.highlightLayer.strokeCircle(sx, sy, radius);
   }
 
   /**

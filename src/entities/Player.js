@@ -156,6 +156,26 @@ export class Player {
     this.qKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
     this.qKey.on('down', () => this.handleQAction());
 
+    // K key for Kiss Mother action
+    this.kKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K);
+    this.kKey.on('down', () => this.handleKAction());
+
+    // Objective action keys (H, P, J, M, L)
+    this.hKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
+    this.hKey.on('down', () => this.handleHAction());
+
+    this.pKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    this.pKey.on('down', () => this.handlePAction());
+
+    this.jKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J);
+    this.jKey.on('down', () => this.handleJAction());
+
+    this.mKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.mKey.on('down', () => this.handleMAction());
+
+    this.lKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.lKey.on('down', () => this.handleLAction());
+
     // Register player context actions with ActionSystem (for popup display)
     this.scene.events.once('update', () => {
       if (this.scene.actionSystem) {
@@ -406,6 +426,48 @@ export class Player {
     }
   }
 
+  handleKAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // K key for Kiss Mother action
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.K);
+  }
+
+  handleHAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // H key for Fripple objective action
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.H);
+  }
+
+  handlePAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // P key for Pizzle objective action
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.P);
+  }
+
+  handleJAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // J key for Jally objective action
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.J);
+  }
+
+  handleMAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // M key for Mootiti objective action
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.M);
+  }
+
+  handleLAction() {
+    if (!this.canControl || this.scene.isGameOver) return;
+
+    // L key for Leave Letter objective action
+    this.scene.actionSystem?.executeAction(Phaser.Input.Keyboard.KeyCodes.L);
+  }
+
   /**
    * Find a pet within gift range
    */
@@ -597,6 +659,8 @@ export class Player {
     // Check humans
     for (const human of this.scene.humans) {
       if (!human.isAlive) continue;
+      // Prisoners cannot witness crimes or alert cops
+      if (human.isPrisoner) continue;
 
       const distance = Math.sqrt(
         Math.pow(human.sprite.x - killX, 2) +
@@ -719,6 +783,8 @@ export class Player {
       return;
     }
 
+    const droppedCorpse = this.carriedCorpse;
+
     // Normal drop
     this.carriedCorpse.x = dropX;
     this.carriedCorpse.y = dropY;
@@ -726,6 +792,16 @@ export class Player {
     this.carriedCorpse.sprite.setDepth(DEPTH.CORPSE);
     this.carriedCorpse.isPickedUp = false;
     this.carriedCorpse = null;
+
+    // Emit event for objective tracking
+    this.scene.events.emit('corpseDropped', {
+      corpse: droppedCorpse,
+      x: dropX,
+      y: dropY,
+      race: droppedCorpse.race,
+      age: droppedCorpse.age,
+      isPolice: droppedCorpse.isPolice
+    });
   }
 
   updateCarriedCorpse() {
@@ -887,6 +963,12 @@ export class Player {
 
     // Spawn some smoke/steam particles
     this.spawnCookingEffect();
+
+    // Emit event for objective tracking
+    this.scene.events.emit('bodyPartCooked', {
+      bodyPart: this.carriedBodyPart,
+      partId: this.carriedBodyPart.partId
+    });
   }
 
   /**
@@ -922,11 +1004,20 @@ export class Player {
   eatBodyPart() {
     if (!this.carriedBodyPart) return;
 
+    const eatenPart = this.carriedBodyPart;
+
     // Emit hearts and slobber
     this.spawnEatingEffect();
 
     // Show notification
     this.scene.showNotification('the voices feast');
+
+    // Emit event for objective tracking
+    this.scene.events.emit('bodyPartEaten', {
+      bodyPart: eatenPart,
+      partId: eatenPart.partId,
+      isCooked: eatenPart.isCooked
+    });
 
     // Destroy the body part
     if (this.carriedBodyPartSprite) {
@@ -989,11 +1080,22 @@ export class Player {
   giftToPet(pet) {
     if (!this.carriedBodyPart || !pet) return;
 
+    const giftedPart = this.carriedBodyPart;
+
     // Pet eats the body part
     this.spawnMunchingEffect(pet.sprite.x, pet.sprite.y);
 
     // Show notification
     this.scene.showNotification('yes, my sweet dear, munch! munch! munch!!');
+
+    // Emit event for objective tracking
+    this.scene.events.emit('bodyPartGifted', {
+      bodyPart: giftedPart,
+      partId: giftedPart.partId,
+      recipient: pet,
+      recipientType: pet.petType || 'pet',  // 'dog' or 'cat'
+      isCooked: giftedPart.isCooked
+    });
 
     // Destroy the body part
     if (this.carriedBodyPartSprite) {
@@ -1031,11 +1133,22 @@ export class Player {
     if (!this.carriedBodyPart.isCooked) return;  // Only cooked for humans/cops
     if (this.scene.identificationSystem?.isIdentified()) return;  // Can't gift if identified
 
+    const giftedPart = this.carriedBodyPart;
+
     // Human eats the body part
     this.spawnMunchingEffect(human.sprite.x, human.sprite.y);
 
     // Show notification
     this.scene.showNotification('teehee');
+
+    // Emit event for objective tracking
+    this.scene.events.emit('bodyPartGifted', {
+      bodyPart: giftedPart,
+      partId: giftedPart.partId,
+      recipient: human,
+      recipientType: human.isCop ? 'cop' : 'human',
+      isCooked: giftedPart.isCooked
+    });
 
     // Destroy the body part
     if (this.carriedBodyPartSprite) {
@@ -1071,6 +1184,14 @@ export class Player {
 
     // Spawn creepy effect
     this.spawnWearSkinEffect();
+
+    // Emit event for objective tracking
+    this.scene.events.emit('skinWorn', {
+      skinInfo: skinInfo,
+      victimRace: skinInfo.victimRace,
+      victimAge: skinInfo.victimAge,
+      isPrisonerSkin: skinInfo.isPrisonerSkin || false
+    });
 
     // Destroy the body part
     if (this.carriedBodyPartSprite) {
@@ -1338,6 +1459,11 @@ export class Player {
 
     // Spawn some smoke/steam particles
     this.spawnCookingEffect();
+
+    // Emit event for objective tracking
+    this.scene.events.emit('ratCooked', {
+      rat: this.carriedRat
+    });
   }
 
   /**
@@ -1346,11 +1472,19 @@ export class Player {
   eatRat() {
     if (!this.carriedRat) return;
 
+    const eatenRat = this.carriedRat;
+
     // Emit hearts and slobber
     this.spawnEatingEffect();
 
     // Show notification
     this.scene.showNotification('tasty critter!');
+
+    // Emit event for objective tracking
+    this.scene.events.emit('ratEaten', {
+      rat: eatenRat,
+      isCooked: eatenRat.isCooked
+    });
 
     // Destroy the rat entity if alive
     if (this.carriedRat.isAlive && this.carriedRat.entity) {
@@ -1394,11 +1528,21 @@ export class Player {
   giftRatToPet(pet) {
     if (!this.carriedRat || !pet) return;
 
+    const giftedRat = this.carriedRat;
+
     // Pet eats the rat
     this.spawnMunchingEffect(pet.sprite.x, pet.sprite.y);
 
     // Show notification
     this.scene.showNotification('munch! munch! good pet!');
+
+    // Emit event for objective tracking
+    this.scene.events.emit('ratGifted', {
+      rat: giftedRat,
+      recipient: pet,
+      recipientType: pet.petType || 'pet',
+      isCooked: giftedRat.isCooked
+    });
 
     // Clean up carried rat
     if (this.carriedRat.isAlive && this.carriedRat.entity) {
@@ -1419,11 +1563,21 @@ export class Player {
     if (!this.carriedRat.isCooked) return;  // Only cooked rats for humans/cops
     if (this.scene.identificationSystem?.isIdentified()) return;  // Can't gift if identified
 
+    const giftedRat = this.carriedRat;
+
     // Human eats the rat
     this.spawnMunchingEffect(human.sprite.x, human.sprite.y);
 
     // Show notification
     this.scene.showNotification('teehee');
+
+    // Emit event for objective tracking
+    this.scene.events.emit('ratGifted', {
+      rat: giftedRat,
+      recipient: human,
+      recipientType: human.isCop ? 'cop' : 'human',
+      isCooked: giftedRat.isCooked
+    });
 
     // Clean up carried rat
     if (this.carriedRatSprite) {

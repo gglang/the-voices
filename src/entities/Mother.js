@@ -58,8 +58,51 @@ export class Mother {
     const message = messages[Math.floor(Math.random() * messages.length)];
     this.scene.showNotification(message);
 
+    // Spawn slobber drops effect
+    this.spawnSlobberEffect();
+
     // Emit event for potential objective tracking
     this.scene.events.emit('motherKissed', { mother: this });
+  }
+
+  /**
+   * Spawn slobber drops falling from kiss
+   */
+  spawnSlobberEffect() {
+    const kissPosX = this.x;
+    const kissPosY = this.y - 12; // Near forehead
+
+    // Create several slobber droplets
+    const numDroplets = Phaser.Math.Between(3, 6);
+    for (let i = 0; i < numDroplets; i++) {
+      const droplet = this.scene.add.ellipse(
+        kissPosX + Phaser.Math.Between(-6, 6),
+        kissPosY + Phaser.Math.Between(-2, 2),
+        Phaser.Math.Between(2, 4),
+        Phaser.Math.Between(3, 5),
+        0xaaddff,  // Light blue slobber color
+        0.8
+      );
+      droplet.setDepth(DEPTH.EFFECTS);
+
+      // Make sure main camera can see the droplet
+      if (this.scene.hud) {
+        this.scene.hud.ignoreGameObject(droplet);
+      }
+
+      // Animate droplet falling and fading
+      this.scene.tweens.add({
+        targets: droplet,
+        y: droplet.y + Phaser.Math.Between(15, 30),
+        x: droplet.x + Phaser.Math.Between(-4, 4),
+        scaleY: 1.5,  // Stretch as it falls
+        alpha: 0,
+        duration: Phaser.Math.Between(400, 800),
+        delay: i * 50,
+        ease: 'Quad.easeIn',
+        onComplete: () => droplet.destroy()
+      });
+    }
   }
 
   destroy() {

@@ -1090,6 +1090,16 @@ export class Pet {
 
     this.scene.spawnBloodSplatter(deathX, deathY);
 
+    // Emit event for objective tracking
+    this.scene.events.emit('petKilled', {
+      victim: this,
+      x: deathX,
+      y: deathY,
+      petType: this.petType,
+      entityType: this.petType,
+      wasFollowing: this.isFollowing || this.wasFollowing
+    });
+
     const corpseTextureKey = `corpse_${this.petType}_${this.colorVariant.name}`;
     this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, false, null, null, null, true, this.petType);
 

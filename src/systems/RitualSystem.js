@@ -177,6 +177,15 @@ export class RitualSystem {
       }
     });
 
+    // Emit event for objective tracking
+    this.scene.events.emit('ritualPerformed', {
+      corpse: corpse,
+      site: site,
+      isPolice: corpse.isPolice,
+      race: corpse.race,
+      age: corpse.age
+    });
+
     // Handle cop sacrifice - special effect
     if (corpse.isPolice) {
       this.performCopSacrifice(corpse, corpseManager);
