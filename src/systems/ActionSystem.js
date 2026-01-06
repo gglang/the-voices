@@ -9,6 +9,15 @@ export class ActionSystem {
     this.actionRange = 20; // Slightly more than 1 tile for easier interaction
     this.currentTarget = null;
     this.registeredObjects = new Map(); // Map of sprite -> action config
+    this.playerContextActions = null; // Function that returns player context actions
+  }
+
+  /**
+   * Set a function that returns player context actions (e.g., actions based on what player is carrying)
+   * @param {Function} getActions - Function returning array of action objects
+   */
+  setPlayerContextActions(getActions) {
+    this.playerContextActions = getActions;
   }
 
   /**
@@ -67,6 +76,24 @@ export class ActionSystem {
       }
     }
 
+    // Get player context actions (e.g., Eat/Gift when holding body part)
+    const contextActions = this.getPlayerContextActions();
+
+    // Merge context actions with target actions, or create player-based target
+    if (nearestTarget && contextActions.length > 0) {
+      // Add context actions to the nearest target's actions
+      nearestTarget.actions = [...nearestTarget.actions, ...contextActions];
+    } else if (!nearestTarget && contextActions.length > 0) {
+      // Create a virtual target on the player sprite for context actions
+      nearestTarget = {
+        sprite: player.sprite,
+        config: null,
+        actions: contextActions,
+        distance: 0,
+        isPlayerContext: true
+      };
+    }
+
     this.currentTarget = nearestTarget;
   }
 
@@ -78,6 +105,16 @@ export class ActionSystem {
       return config.getActions();
     }
     return config.actions || [];
+  }
+
+  /**
+   * Get player context actions (actions based on what player is holding/doing)
+   */
+  getPlayerContextActions() {
+    if (this.playerContextActions) {
+      return this.playerContextActions();
+    }
+    return [];
   }
 
   /**

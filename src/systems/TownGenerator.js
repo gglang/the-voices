@@ -685,10 +685,10 @@ export class TownGenerator {
   }
 
   markBasementArea(building) {
-    // Larger basement for player home with cages (5x5 in lower portion of building)
+    // Larger basement for player home with cages (5x5 in upper portion of building, away from front door)
     const basementSize = 5;
     const basementX = building.x + 1;
-    const basementY = building.y + building.height - basementSize - 1;
+    const basementY = building.y + 1;  // Upper portion (back of house, away from door)
 
     building.basementArea = {
       x: basementX,
@@ -717,9 +717,9 @@ export class TownGenerator {
   }
 
   addBasementInteriorWalls(building, basementX, basementY, basementSize) {
-    // Mark interior wall tiles above the basement (separating main floor from basement)
-    // The wall is at basementY - 1 (above the basement)
-    const wallY = basementY - 1;
+    // Mark interior wall tiles below the basement (separating basement from main floor)
+    // The wall is at basementY + basementSize (below the basement)
+    const wallY = basementY + basementSize;
 
     for (let tx = basementX; tx < basementX + basementSize; tx++) {
       // Don't put a wall where the hatch will be
@@ -804,6 +804,10 @@ export class TownGenerator {
         } else if (cell.type === 'plaza') {
           textureKey = `sidewalk_${neighborhood}`;
           depth = DEPTH.ROAD;
+        } else if (cell.type === 'wall' && cell.buildingId !== null) {
+          // Interior walls still need floor underneath
+          const building = this.buildings.find(b => b.id === cell.buildingId);
+          textureKey = building ? `floor_${building.houseType}` : 'house_floor';
         }
 
         const tile = this.scene.add.image(px, py, textureKey);
@@ -930,9 +934,9 @@ export class TownGenerator {
       ];
     }
 
-    // Floor hatch - positioned at center of building, above basement area
+    // Floor hatch - positioned at center of building, below basement area (at the wall gap)
     const hatchX = (building.x + Math.floor(building.width / 2)) * this.tileSize + this.tileSize / 2;
-    const hatchY = (building.basementArea.y - 1) * this.tileSize + this.tileSize / 2;
+    const hatchY = (building.basementArea.y + building.basementArea.height) * this.tileSize + this.tileSize / 2;
     const hatch = this.scene.add.image(hatchX, hatchY, 'floor_hatch');
     hatch.setDepth(DEPTH.FURNITURE);
     if (this.scene.hud) this.scene.hud.ignoreGameObject(hatch);
@@ -951,8 +955,8 @@ export class TownGenerator {
   addFurniture(building) {
     const { x, y, width, height, type } = building;
 
-    // For player home, bed is in upper right area (away from basement in lower left)
-    const startX = type === 'player_home' ? x + width - 3 : x + 1;
+    // For player home, bed is in top right corner (away from basement in upper left)
+    const startX = type === 'player_home' ? x + width - 2 : x + 1;
     const startY = type === 'player_home' ? y + 1 : y + 1;
 
     // Bed
@@ -981,6 +985,287 @@ export class TownGenerator {
       table.setDepth(DEPTH.FURNITURE);
       if (this.scene.hud) this.scene.hud.ignoreGameObject(table);
     }
+
+    // Add kitchen furniture to all houses
+    this.addKitchen(building);
+
+    // Add lamp to all houses
+    this.addLamp(building);
+  }
+
+  /**
+   * Add kitchen furniture (stove, sink, counter, fridge) to a building
+   * Kitchen is placed along the bottom wall (above the door), away from basement and beds
+   */
+  addKitchen(building) {
+    const { x, y, width, height, type } = building;
+
+    // Kitchen is placed along the bottom wall (left side, away from door which is center)
+    // This keeps it away from:
+    // - Basement/dungeon (upper-left corner in player_home)
+    // - Bed (upper-right corner in player_home, upper-left in regular houses)
+    let kitchenBaseX, kitchenBaseY;
+
+    if (type === 'player_home') {
+      // For player home: bottom-left corner of main living area
+      // Basement is at y+1 to y+6, bed is at top-right
+      // Place kitchen along bottom wall, left side
+      kitchenBaseX = x + 1;
+      kitchenBaseY = y + height - 2;  // Bottom wall (1 tile from edge for wall)
+    } else {
+      // For regular houses: bottom wall, left side (door is center-bottom)
+      kitchenBaseX = x + 1;
+      kitchenBaseY = y + height - 2;  // Bottom wall
+    }
+
+    // Place kitchen horizontally along the bottom wall
+    const stoveX = kitchenBaseX * this.tileSize + this.tileSize / 2;
+    const stoveY = kitchenBaseY * this.tileSize + this.tileSize / 2;
+
+    // Stove (interactable for cooking)
+    const stove = this.scene.add.image(stoveX, stoveY, 'furniture_stove');
+    stove.setDepth(DEPTH.FURNITURE);
+    if (this.scene.hud) this.scene.hud.ignoreGameObject(stove);
+
+    // Store stove reference for interaction
+    building.stove = {
+      sprite: stove,
+      x: stoveX,
+      y: stoveY
+    };
+
+    // Register stove for cooking action
+    this.registerStoveAction(stove, building);
+
+    // Counter (next to stove, to the right along the wall)
+    const counterX = (kitchenBaseX + 1) * this.tileSize + this.tileSize / 2;
+    const counter = this.scene.add.image(counterX, stoveY, 'furniture_counter');
+    counter.setDepth(DEPTH.FURNITURE);
+    if (this.scene.hud) this.scene.hud.ignoreGameObject(counter);
+
+    // Only add sink and fridge if building is large enough and won't overlap door
+    const doorTileX = Math.floor(width / 2);  // Door is at center
+
+    if (width >= 5 && kitchenBaseX + 2 < x + doorTileX - 1) {
+      // Sink (next to counter along wall)
+      const sinkX = (kitchenBaseX + 2) * this.tileSize + this.tileSize / 2;
+      const sink = this.scene.add.image(sinkX, stoveY, 'furniture_sink');
+      sink.setDepth(DEPTH.FURNITURE);
+      if (this.scene.hud) this.scene.hud.ignoreGameObject(sink);
+
+      // Fridge (next to sink if room)
+      if (width >= 7 && kitchenBaseX + 3 < x + doorTileX - 1) {
+        const fridgeX = (kitchenBaseX + 3) * this.tileSize + this.tileSize / 2;
+        const fridge = this.scene.add.image(fridgeX, stoveY, 'furniture_fridge');
+        fridge.setDepth(DEPTH.FURNITURE);
+        if (this.scene.hud) this.scene.hud.ignoreGameObject(fridge);
+      }
+    }
+  }
+
+  /**
+   * Register a stove for cooking action
+   */
+  registerStoveAction(stove, building) {
+    if (!this.scene.actionSystem) return;
+
+    this.scene.actionSystem.registerObject(stove, {
+      owner: building,
+      getActions: () => this.getStoveActions(building)
+    });
+  }
+
+  /**
+   * Get available actions for a stove
+   */
+  getStoveActions(building) {
+    const actions = [];
+
+    // Show cook action if player is carrying an uncoooked body part
+    if (this.scene.player?.carriedBodyPart && !this.scene.player.carriedBodyPart.isCooked) {
+      actions.push({
+        name: 'Cook',
+        key: 'C',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.C,
+        callback: () => this.scene.player.cookBodyPart()
+      });
+    }
+
+    // Show cook action if player is carrying an uncooked rat (living or dead)
+    if (this.scene.player?.carriedRat && !this.scene.player.carriedRat.isCooked) {
+      actions.push({
+        name: 'Cook',
+        key: 'C',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.C,
+        callback: () => this.scene.player.cookRat()
+      });
+    }
+
+    return actions;
+  }
+
+  /**
+   * Add a lamp to a building
+   * Lamp is placed near the table or in a corner
+   */
+  addLamp(building) {
+    const { x, y, width, height, type } = building;
+
+    // Place lamp near the center-right of the room (on or near the table area)
+    let lampTileX, lampTileY;
+
+    if (type === 'player_home') {
+      // For player home: place in the main living area, center-ish
+      lampTileX = x + Math.floor(width / 2) + 2;
+      lampTileY = y + Math.floor(height / 2) - 1;
+    } else {
+      // For regular houses: near the table
+      lampTileX = x + Math.floor(width / 2) + 1;
+      lampTileY = y + Math.floor(height / 2) - 1;
+    }
+
+    const lampX = lampTileX * this.tileSize + this.tileSize / 2;
+    const lampY = lampTileY * this.tileSize + this.tileSize / 2;
+
+    const lamp = this.scene.add.image(lampX, lampY, 'furniture_lamp');
+    lamp.setDepth(DEPTH.FURNITURE);
+    if (this.scene.hud) this.scene.hud.ignoreGameObject(lamp);
+
+    // Create lamp data object
+    const lampData = {
+      sprite: lamp,
+      x: lampX,
+      y: lampY,
+      isOn: true,  // Lamps start on
+      lightGraphics: null,
+      building: building
+    };
+
+    // Store lamp reference
+    building.lamp = lampData;
+    this.scene.lamps.push(lampData);
+
+    // Register lamp for actions
+    this.registerLampAction(lampData);
+
+    // Create light effect (will be updated by day/night system)
+    this.createLampLight(lampData);
+  }
+
+  /**
+   * Create the light effect for a lamp
+   */
+  createLampLight(lampData) {
+    const light = this.scene.add.graphics();
+    light.setDepth(DEPTH.FURNITURE - 1);  // Just below furniture
+    lampData.lightGraphics = light;
+
+    if (this.scene.hud) this.scene.hud.ignoreGameObject(light);
+
+    // Initial update
+    this.updateLampLight(lampData);
+  }
+
+  /**
+   * Update lamp light visibility based on time and lamp state
+   */
+  updateLampLight(lampData) {
+    if (!lampData.lightGraphics) return;
+
+    lampData.lightGraphics.clear();
+
+    // Only show light at night and when lamp is on
+    const isNight = this.scene.dayNightSystem?.isNight() || false;
+    if (lampData.isOn && isNight) {
+      // Draw warm light glow
+      lampData.lightGraphics.fillStyle(0xffeeaa, 0.15);
+      lampData.lightGraphics.fillCircle(lampData.x, lampData.y, 48);
+      lampData.lightGraphics.fillStyle(0xffdd88, 0.2);
+      lampData.lightGraphics.fillCircle(lampData.x, lampData.y, 32);
+      lampData.lightGraphics.fillStyle(0xffcc66, 0.3);
+      lampData.lightGraphics.fillCircle(lampData.x, lampData.y, 16);
+    }
+  }
+
+  /**
+   * Register a lamp for pickup and toggle actions
+   */
+  registerLampAction(lampData) {
+    if (!this.scene.actionSystem) return;
+
+    this.scene.actionSystem.registerObject(lampData.sprite, {
+      owner: lampData,
+      getActions: () => this.getLampActions(lampData)
+    });
+  }
+
+  /**
+   * Get available actions for a lamp
+   */
+  getLampActions(lampData) {
+    const actions = [];
+
+    // Toggle on/off action
+    actions.push({
+      name: lampData.isOn ? 'Turn Off' : 'Turn On',
+      key: 'T',
+      keyCode: Phaser.Input.Keyboard.KeyCodes.T,
+      callback: () => this.toggleLamp(lampData)
+    });
+
+    // Pickup action (only if not carrying anything)
+    if (!this.scene.player?.isCarryingAnything()) {
+      actions.push({
+        name: 'Pick Up',
+        key: 'SPACE',
+        keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
+        callback: () => this.pickupLamp(lampData)
+      });
+    }
+
+    return actions;
+  }
+
+  /**
+   * Toggle a lamp on/off
+   */
+  toggleLamp(lampData) {
+    lampData.isOn = !lampData.isOn;
+    this.updateLampLight(lampData);
+
+    // Show notification
+    const message = lampData.isOn ? '*click* light on' : '*click* light off';
+    this.scene.showNotification(message);
+  }
+
+  /**
+   * Pick up a lamp
+   */
+  pickupLamp(lampData) {
+    if (this.scene.player?.isCarryingAnything()) return;
+
+    // Unregister from action system
+    if (this.scene.actionSystem) {
+      this.scene.actionSystem.unregisterObject(lampData.sprite);
+    }
+
+    // Destroy light graphics
+    if (lampData.lightGraphics) {
+      lampData.lightGraphics.destroy();
+      lampData.lightGraphics = null;
+    }
+
+    // Destroy sprite
+    lampData.sprite.destroy();
+
+    // Remove from lamps array
+    const index = this.scene.lamps.indexOf(lampData);
+    if (index > -1) {
+      this.scene.lamps.splice(index, 1);
+    }
+
+    // Player picks up the lamp
+    this.scene.player.pickupLamp(lampData);
   }
 
   /**

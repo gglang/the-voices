@@ -14,7 +14,18 @@ export class IdentificationSystem {
    * Check if player is currently doing something illegal
    */
   isPlayerDoingIllegalActivity() {
-    if (this.scene.player?.carriedCorpse) return true;
+    const player = this.scene.player;
+    if (!player) return this.playerDoingIllegalActivity;
+
+    // Carrying a corpse is illegal
+    if (player.carriedCorpse) return true;
+
+    // Carrying a prisoner is illegal
+    if (player.carriedPrisoner) return true;
+
+    // Carrying an uncooked body part is illegal (cooked looks like food)
+    if (player.carriedBodyPart && !player.carriedBodyPart.isCooked) return true;
+
     return this.playerDoingIllegalActivity;
   }
 

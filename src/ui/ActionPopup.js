@@ -39,6 +39,12 @@ export class ActionPopup {
       return;
     }
 
+    // Check if a body part menu is open (in corpse manager or any cage)
+    if (this.isBodyPartMenuOpen()) {
+      this.hide();
+      return;
+    }
+
     // Check if target or actions changed
     const actionsChanged = this.hasActionsChanged(target.actions);
     if (this.currentTarget !== target.sprite || actionsChanged) {
@@ -51,6 +57,27 @@ export class ActionPopup {
     // Update position to follow target
     this.updatePosition(target.sprite);
     this.show();
+  }
+
+  /**
+   * Check if any body part menu is currently open
+   */
+  isBodyPartMenuOpen() {
+    // Check corpse manager
+    if (this.scene.corpseManager?.isBodyPartMenuOpen()) {
+      return true;
+    }
+
+    // Check all cages
+    if (this.scene.cages) {
+      for (const cage of this.scene.cages) {
+        if (cage.isBodyPartMenuOpen()) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   hasActionsChanged(actions) {

@@ -53,6 +53,10 @@ export class TextureFactory {
     // Pets
     this.createAllPets();
     this.createAllPetCorpses();
+    // Rats
+    this.createRatTextures();
+    // Body parts
+    this.createBodyPartTextures();
   }
 
   /**
@@ -769,6 +773,216 @@ export class TextureFactory {
     g.fillRect(2, 0, 12, 4);
     g.fillRect(4, 4, 8, 8);
     g.generateTexture('furniture_chair', 16, 12);
+
+    // Kitchen furniture
+    this.createKitchenFurniture();
+
+    // Lamp
+    this.createLampTexture();
+  }
+
+  /**
+   * Create kitchen furniture textures
+   */
+  createKitchenFurniture() {
+    this.createStoveTexture();
+    this.createSinkTexture();
+    this.createCounterTexture();
+    this.createFridgeTexture();
+  }
+
+  /**
+   * Lamp texture (8x12) - a small table lamp
+   */
+  createLampTexture() {
+    const key = 'furniture_lamp';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Base (dark wood)
+    g.fillStyle(0x4a3020);
+    g.fillRect(2, 10, 4, 2);
+
+    // Stem (brass/gold)
+    g.fillStyle(0xb8860b);
+    g.fillRect(3, 4, 2, 6);
+
+    // Lampshade (warm off-white)
+    g.fillStyle(0xfff8dc);
+    g.fillTriangle(0, 6, 8, 6, 4, 0);
+
+    // Inner lampshade glow hint
+    g.fillStyle(0xfffacd);
+    g.fillTriangle(2, 5, 6, 5, 4, 1);
+
+    // Shade rim
+    g.fillStyle(0xdaa520);
+    g.fillRect(0, 5, 8, 1);
+
+    g.generateTexture(key, 8, 12);
+  }
+
+  /**
+   * Stove texture (16x16)
+   */
+  createStoveTexture() {
+    const key = 'furniture_stove';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Stove body (dark gray)
+    g.fillStyle(0x333333);
+    g.fillRect(0, 0, 16, 16);
+
+    // Top surface (slightly lighter)
+    g.fillStyle(0x444444);
+    g.fillRect(1, 1, 14, 8);
+
+    // Burners (4 circles)
+    g.fillStyle(0x222222);
+    g.fillCircle(4, 3, 2);
+    g.fillCircle(12, 3, 2);
+    g.fillCircle(4, 7, 2);
+    g.fillCircle(12, 7, 2);
+
+    // Burner rings (red/orange for heat look)
+    g.lineStyle(1, 0x553333);
+    g.strokeCircle(4, 3, 2);
+    g.strokeCircle(12, 3, 2);
+    g.strokeCircle(4, 7, 2);
+    g.strokeCircle(12, 7, 2);
+
+    // Oven door
+    g.fillStyle(0x2a2a2a);
+    g.fillRect(2, 10, 12, 5);
+
+    // Oven window
+    g.fillStyle(0x1a1a1a);
+    g.fillRect(4, 11, 8, 3);
+
+    // Handle
+    g.fillStyle(0x555555);
+    g.fillRect(6, 9, 4, 1);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Sink texture (16x16)
+   */
+  createSinkTexture() {
+    const key = 'furniture_sink';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Counter surface
+    g.fillStyle(0x888888);
+    g.fillRect(0, 0, 16, 16);
+
+    // Sink basin (darker inset)
+    g.fillStyle(0x666666);
+    g.fillRect(2, 3, 12, 10);
+
+    // Inner basin (even darker)
+    g.fillStyle(0x444444);
+    g.fillRect(3, 4, 10, 8);
+
+    // Drain
+    g.fillStyle(0x222222);
+    g.fillCircle(8, 8, 1);
+
+    // Faucet base
+    g.fillStyle(0xaaaaaa);
+    g.fillRect(6, 1, 4, 2);
+
+    // Faucet spout
+    g.fillStyle(0x999999);
+    g.fillRect(7, 0, 2, 1);
+    g.fillRect(8, 0, 1, 4);
+
+    // Handles
+    g.fillStyle(0xbbbbbb);
+    g.fillCircle(4, 2, 1);
+    g.fillCircle(12, 2, 1);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Counter texture (16x16)
+   */
+  createCounterTexture() {
+    const key = 'furniture_counter';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Counter top
+    g.fillStyle(0x888888);
+    g.fillRect(0, 0, 16, 4);
+
+    // Cabinet body
+    g.fillStyle(0x8B4513);
+    g.fillRect(0, 4, 16, 12);
+
+    // Cabinet door lines
+    g.lineStyle(1, 0x6B3503);
+    g.lineBetween(8, 4, 8, 16);
+
+    // Door handles
+    g.fillStyle(0xaaaaaa);
+    g.fillRect(6, 9, 1, 2);
+    g.fillRect(9, 9, 1, 2);
+
+    // Counter edge highlight
+    g.fillStyle(0x999999);
+    g.fillRect(0, 0, 16, 1);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Fridge texture (16x24)
+   */
+  createFridgeTexture() {
+    const key = 'furniture_fridge';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Fridge body (white/off-white)
+    g.fillStyle(0xdddddd);
+    g.fillRect(0, 0, 16, 24);
+
+    // Freezer section (top)
+    g.fillStyle(0xcccccc);
+    g.fillRect(1, 1, 14, 7);
+
+    // Fridge section (bottom)
+    g.fillStyle(0xcccccc);
+    g.fillRect(1, 9, 14, 14);
+
+    // Divider line
+    g.fillStyle(0x999999);
+    g.fillRect(0, 8, 16, 1);
+
+    // Freezer handle
+    g.fillStyle(0x888888);
+    g.fillRect(12, 3, 2, 3);
+
+    // Fridge handle
+    g.fillStyle(0x888888);
+    g.fillRect(12, 12, 2, 4);
+
+    // Edge shadows
+    g.fillStyle(0xbbbbbb);
+    g.fillRect(0, 0, 1, 24);
+    g.fillRect(15, 0, 1, 24);
+
+    g.generateTexture(key, 16, 24);
   }
 
   /**
@@ -1543,5 +1757,461 @@ export class TextureFactory {
     // Stripes/spots
     g.fillStyle(spotColor);
     g.fillRect(3, 6, 2, 1);
+  }
+
+  // ==================== Body Part Textures ====================
+
+  /**
+   * Create all body part textures
+   */
+  createBodyPartTextures() {
+    this.createHeadTexture();
+    this.createHeartTexture();
+    this.createArmTexture();
+    this.createLegTexture();
+    this.createFunniesTexture();
+    this.createSkinTexture();
+    // Cooked versions
+    this.createCookedBodyPartTextures();
+  }
+
+  /**
+   * Severed head texture (8x8)
+   */
+  createHeadTexture() {
+    const key = 'body_part_head';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Head shape (oval)
+    g.fillStyle(0x8b6b5c);  // Skin tone
+    g.fillCircle(4, 4, 3);
+
+    // Eyes (X marks)
+    g.lineStyle(1, 0x000000);
+    g.lineBetween(2, 2, 3, 3);
+    g.lineBetween(2, 3, 3, 2);
+    g.lineBetween(5, 2, 6, 3);
+    g.lineBetween(5, 3, 6, 2);
+
+    // Blood at neck
+    g.fillStyle(0x8b0000);
+    g.fillRect(2, 6, 4, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Heart texture (8x8)
+   */
+  createHeartTexture() {
+    const key = 'body_part_heart';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Heart shape
+    g.fillStyle(0x8b0000);
+    g.fillCircle(2, 2, 2);
+    g.fillCircle(5, 2, 2);
+    g.fillTriangle(0, 3, 7, 3, 4, 7);
+
+    // Highlight
+    g.fillStyle(0xaa2222);
+    g.fillRect(2, 1, 1, 1);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Arm texture (8x8)
+   */
+  createArmTexture() {
+    const key = 'body_part_arm';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Arm shape
+    g.fillStyle(0x8b6b5c);  // Skin tone
+    g.fillRect(1, 2, 6, 2);
+
+    // Hand
+    g.fillRect(6, 1, 2, 4);
+
+    // Blood at shoulder
+    g.fillStyle(0x8b0000);
+    g.fillRect(0, 2, 2, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Leg texture (8x8)
+   */
+  createLegTexture() {
+    const key = 'body_part_leg';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Leg shape
+    g.fillStyle(0x8b6b5c);  // Skin tone
+    g.fillRect(2, 0, 3, 6);
+
+    // Foot
+    g.fillRect(2, 5, 5, 2);
+
+    // Blood at top
+    g.fillStyle(0x8b0000);
+    g.fillRect(2, 0, 3, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Funnies texture (8x8)
+   */
+  createFunniesTexture() {
+    const key = 'body_part_funnies';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Abstract blob shape
+    g.fillStyle(0x8b6b5c);  // Skin tone
+    g.fillCircle(4, 4, 3);
+
+    // Blood
+    g.fillStyle(0x8b0000);
+    g.fillCircle(4, 6, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Skin texture (8x8) - folded skin piece
+   */
+  createSkinTexture() {
+    const key = 'body_part_skin';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Folded skin (irregular shape)
+    g.fillStyle(0x8b6b5c);  // Skin tone
+    g.fillRect(1, 2, 6, 4);
+
+    // Wrinkle/fold lines
+    g.lineStyle(1, 0x6b4b3c);
+    g.lineBetween(2, 3, 5, 3);
+    g.lineBetween(3, 5, 6, 5);
+
+    // Blood edges
+    g.fillStyle(0x8b0000);
+    g.fillRect(0, 2, 1, 4);
+    g.fillRect(7, 2, 1, 4);
+    g.fillRect(1, 1, 6, 1);
+    g.fillRect(1, 6, 6, 1);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  // ==================== Cooked Body Part Textures ====================
+
+  /**
+   * Create cooked versions of all body parts
+   */
+  createCookedBodyPartTextures() {
+    this.createCookedHeadTexture();
+    this.createCookedHeartTexture();
+    this.createCookedArmTexture();
+    this.createCookedLegTexture();
+    this.createCookedFunniesTexture();
+    this.createCookedSkinTexture();
+  }
+
+  /**
+   * Cooked head texture (8x8) - roasted brown
+   */
+  createCookedHeadTexture() {
+    const key = 'body_part_head_cooked';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Head shape (roasted brown)
+    g.fillStyle(0x8b4513);  // Roasted brown
+    g.fillCircle(4, 4, 3);
+
+    // Char marks
+    g.fillStyle(0x4a2a0a);
+    g.fillRect(2, 3, 2, 1);
+    g.fillRect(5, 4, 2, 1);
+
+    // Crispy edges
+    g.fillStyle(0x6b3513);
+    g.fillRect(2, 6, 4, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Cooked heart texture (8x8)
+   */
+  createCookedHeartTexture() {
+    const key = 'body_part_heart_cooked';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Heart shape (dark roasted)
+    g.fillStyle(0x4a1515);
+    g.fillCircle(2, 2, 2);
+    g.fillCircle(5, 2, 2);
+    g.fillTriangle(0, 3, 7, 3, 4, 7);
+
+    // Char/grill marks
+    g.fillStyle(0x2a0a0a);
+    g.fillRect(1, 3, 1, 3);
+    g.fillRect(3, 3, 1, 3);
+    g.fillRect(5, 3, 1, 3);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Cooked arm texture (8x8)
+   */
+  createCookedArmTexture() {
+    const key = 'body_part_arm_cooked';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Arm shape (roasted)
+    g.fillStyle(0x8b4513);
+    g.fillRect(1, 2, 6, 2);
+
+    // Hand
+    g.fillRect(6, 1, 2, 4);
+
+    // Char marks
+    g.fillStyle(0x4a2a0a);
+    g.fillRect(2, 2, 1, 2);
+    g.fillRect(5, 2, 1, 2);
+
+    // Crispy end
+    g.fillStyle(0x6b3513);
+    g.fillRect(0, 2, 2, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Cooked leg texture (8x8)
+   */
+  createCookedLegTexture() {
+    const key = 'body_part_leg_cooked';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Leg shape (roasted)
+    g.fillStyle(0x8b4513);
+    g.fillRect(2, 0, 3, 6);
+
+    // Foot
+    g.fillRect(2, 5, 5, 2);
+
+    // Char marks
+    g.fillStyle(0x4a2a0a);
+    g.fillRect(3, 1, 1, 4);
+    g.fillRect(4, 6, 2, 1);
+
+    // Crispy end
+    g.fillStyle(0x6b3513);
+    g.fillRect(2, 0, 3, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Cooked funnies texture (8x8)
+   */
+  createCookedFunniesTexture() {
+    const key = 'body_part_funnies_cooked';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Roasted blob shape
+    g.fillStyle(0x8b4513);
+    g.fillCircle(4, 4, 3);
+
+    // Char marks
+    g.fillStyle(0x4a2a0a);
+    g.fillCircle(3, 3, 1);
+    g.fillCircle(5, 5, 1);
+
+    // Crispy bottom
+    g.fillStyle(0x6b3513);
+    g.fillCircle(4, 6, 2);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  /**
+   * Cooked skin texture (8x8) - crispy bacon-like
+   */
+  createCookedSkinTexture() {
+    const key = 'body_part_skin_cooked';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Crispy roasted skin
+    g.fillStyle(0x8b4513);  // Roasted brown
+    g.fillRect(1, 2, 6, 4);
+
+    // Char/crispy lines
+    g.lineStyle(1, 0x4a2a0a);
+    g.lineBetween(2, 3, 5, 3);
+    g.lineBetween(3, 5, 6, 5);
+
+    // Crispy edges (darker)
+    g.fillStyle(0x4a2a0a);
+    g.fillRect(0, 2, 1, 4);
+    g.fillRect(7, 2, 1, 4);
+    g.fillRect(1, 1, 6, 1);
+    g.fillRect(1, 6, 6, 1);
+
+    g.generateTexture(key, 8, 8);
+  }
+
+  // ==================== Rat Textures ====================
+
+  /**
+   * Create all rat textures (alive, dead, cooked)
+   */
+  createRatTextures() {
+    this.createRatAlive();
+    this.createRatDead();
+    this.createRatCooked();
+  }
+
+  /**
+   * Living rat texture (8x6)
+   */
+  createRatAlive() {
+    const key = 'rat';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Body (gray)
+    g.fillStyle(0x5a5a5a);
+    g.fillRect(1, 2, 5, 3);
+
+    // Head (slightly lighter)
+    g.fillStyle(0x6a6a6a);
+    g.fillRect(5, 1, 2, 3);
+
+    // Ear
+    g.fillStyle(0x8a8a8a);
+    g.fillCircle(6, 1, 1);
+
+    // Eye
+    g.fillStyle(0x000000);
+    g.fillRect(6, 2, 1, 1);
+
+    // Nose (pink)
+    g.fillStyle(0xffaaaa);
+    g.fillRect(7, 2, 1, 1);
+
+    // Tail (long and thin)
+    g.fillStyle(0x9a8a8a);
+    g.fillRect(0, 3, 2, 1);
+
+    // Feet
+    g.fillStyle(0x8a7a7a);
+    g.fillRect(2, 5, 1, 1);
+    g.fillRect(4, 5, 1, 1);
+
+    g.generateTexture(key, 8, 6);
+  }
+
+  /**
+   * Dead rat texture (8x6)
+   */
+  createRatDead() {
+    const key = 'rat_dead';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Body (tinted gray-green)
+    g.fillStyle(this.tintColor(0x5a5a5a));
+    g.fillRect(1, 2, 5, 3);
+
+    // Head
+    g.fillStyle(this.tintColor(0x6a6a6a));
+    g.fillRect(5, 2, 2, 3);
+
+    // Ear flopped
+    g.fillStyle(this.tintColor(0x8a8a8a));
+    g.fillRect(6, 1, 1, 1);
+
+    // X eye
+    g.lineStyle(1, 0x000000);
+    g.lineBetween(5, 2, 6, 3);
+    g.lineBetween(5, 3, 6, 2);
+
+    // Tail limp
+    g.fillStyle(this.tintColor(0x9a8a8a));
+    g.fillRect(0, 4, 2, 1);
+
+    // Feet sprawled
+    g.fillStyle(this.tintColor(0x8a7a7a));
+    g.fillRect(2, 5, 1, 1);
+    g.fillRect(4, 5, 1, 1);
+    g.fillRect(3, 0, 1, 1);
+
+    g.generateTexture(key, 8, 6);
+  }
+
+  /**
+   * Cooked rat texture (8x6) - roasted brown
+   */
+  createRatCooked() {
+    const key = 'rat_cooked';
+    if (this.scene.textures.exists(key)) return;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+
+    // Body (roasted brown)
+    g.fillStyle(0x8b4513);
+    g.fillRect(1, 2, 5, 3);
+
+    // Head
+    g.fillStyle(0x7b3503);
+    g.fillRect(5, 2, 2, 3);
+
+    // Char marks
+    g.fillStyle(0x4a2a0a);
+    g.fillRect(2, 3, 2, 1);
+    g.fillRect(5, 3, 1, 1);
+
+    // Crispy tail
+    g.fillStyle(0x5a3a1a);
+    g.fillRect(0, 3, 2, 1);
+
+    // Crispy feet
+    g.fillStyle(0x5a3a1a);
+    g.fillRect(2, 5, 1, 1);
+    g.fillRect(4, 5, 1, 1);
+
+    g.generateTexture(key, 8, 6);
   }
 }

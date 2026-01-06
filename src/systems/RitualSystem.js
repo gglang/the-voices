@@ -191,20 +191,14 @@ export class RitualSystem {
   }
 
   /**
-   * Sacrifice a cop corpse - transforms player and removes identification
+   * Sacrifice a cop corpse - extra points but no longer changes appearance
    */
   performCopSacrifice(corpse, corpseManager) {
     // Destroy corpse
     corpseManager.destroy(corpse);
 
-    // Transform player appearance
-    this.scene.transformPlayerAppearance();
-
-    // Remove identification
-    this.scene.identificationSystem.reset();
-
-    // Show notification
-    this.scene.hud?.showNotification('COP SACRIFICE!\nIdentity cleansed!\nNew disguise acquired!', 3000);
+    // Show notification - cop sacrifices are still special but don't change appearance
+    this.scene.hud?.showNotification('COP SACRIFICE!\nThe voices cackle with glee!', 3000);
   }
 
   /**

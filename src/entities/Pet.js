@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PET, DEPTH, TRUST, PRISONER } from '../config/constants.js';
+import { PET, DEPTH, TRUST, PRISONER, BODY_PARTS } from '../config/constants.js';
 import { LineOfSight } from '../utils/LineOfSight.js';
 import { Pathfinding } from '../utils/Pathfinding.js';
 
@@ -73,6 +73,18 @@ export class Pet {
     this.miseryMeter = null;
     this.isBeingCarried = false;
     this.fleeingToReportPlayer = false;
+    this.hasBeenImprisoned = false;  // Track if pet was ever imprisoned (for permanent fleeing)
+
+    // Body parts tracking (how many removed)
+    this.removedParts = {
+      head: 0,
+      heart: 0,
+      arm: 0,  // Pets have 4 legs, use arm for front legs
+      leg: 0,  // Back legs
+      funnies: 0,
+      skin: 0
+    };
+    this.missingPartsOverlay = null;
 
     this.createSprite(x, y);
     this.initializeWandering();
@@ -499,6 +511,9 @@ export class Pet {
     // Update follow icon position
     this.updateFollowIconPosition();
 
+    // Update missing parts overlay position
+    this.updateMissingPartsPosition();
+
     // Handle imprisoned state - no AI updates
     if (this.state === PetState.IMPRISONED) {
       this.sprite.setVelocity(0, 0);
@@ -549,6 +564,7 @@ export class Pet {
     // Pets only flee from:
     // 1. Seeing illegal activity directly (witnessing a kill, break-in)
     // 2. Player carrying a corpse
+    // 3. Having been previously imprisoned (they always flee on sight)
     // They do NOT flee from player being identified
 
     const player = this.scene.player;
@@ -562,6 +578,18 @@ export class Pet {
     const sightRange = 4 * 16; // 4 tiles
 
     if (distance < sightRange) {
+      // If pet has been imprisoned before, always flee from player
+      if (this.hasBeenImprisoned) {
+        if (LineOfSight.hasLineOfSight(
+          this.sprite.x, this.sprite.y,
+          player.sprite.x, player.sprite.y,
+          this.scene.walls
+        )) {
+          this.startFleeing(player.sprite.x, player.sprite.y);
+          return;
+        }
+      }
+
       // Check if player is carrying a corpse or doing illegal activity
       const isCarryingCorpse = player.carriedCorpse !== null;
       const isDoingIllegal = this.scene.illegalActivityTime &&
@@ -579,8 +607,8 @@ export class Pet {
       }
     }
 
-    // If fleeing and player is far away, stop fleeing
-    if (this.state === PetState.FLEEING && distance > 6 * 16) {
+    // If fleeing and player is far away, stop fleeing (unless formerly imprisoned)
+    if (this.state === PetState.FLEEING && distance > 6 * 16 && !this.hasBeenImprisoned) {
       this.state = PetState.WANDERING;
       this.pickNewTarget();
     }
@@ -763,8 +791,10 @@ export class Pet {
     this.targetY = this.spawnY;
     this.recalculatePath();
 
-    // Flag that we're fleeing to report player
-    this.fleeingToReportPlayer = true;
+    // Pets do NOT report the player or trigger game over when released
+    // They just flee home and will permanently flee from the player afterwards
+    this.fleeingToReportPlayer = false;
+    this.hasBeenImprisoned = true;  // Mark as having been imprisoned
   }
 
   increaseMisery() {
@@ -826,6 +856,9 @@ export class Pet {
     if (!this.miseryMeter) return;
     this.miseryMeter.clear();
 
+    // Only draw if misery > 0
+    if (this.misery <= 0) return;
+
     const x = this.sprite.x - 10;
     const y = this.sprite.y - 18;
     const width = 20;
@@ -865,6 +898,164 @@ export class Pet {
     }
   }
 
+  // ==================== Body Parts ====================
+
+  /**
+   * Get list of available body parts that can still be removed
+   */
+  getAvailableBodyParts() {
+    const available = [];
+    for (const [key, config] of Object.entries(BODY_PARTS)) {
+      if (this.removedParts[config.id] < config.max) {
+        available.push({
+          ...config,
+          remaining: config.max - this.removedParts[config.id]
+        });
+      }
+    }
+    return available;
+  }
+
+  /**
+   * Remove a body part
+   * @returns {object|null} The removed body part info, or null if not available
+   */
+  removeBodyPart(partId) {
+    const partConfig = Object.values(BODY_PARTS).find(p => p.id === partId);
+    if (!partConfig) return null;
+
+    if (this.removedParts[partId] >= partConfig.max) {
+      return null; // Already removed max
+    }
+
+    this.removedParts[partId]++;
+
+    // Check for fatal parts on living entities
+    if (this.isAlive && partConfig.fatal) {
+      this.kill();
+    }
+
+    // Apply speed reduction for legs (any leg removal slows the pet)
+    if ((partId === 'leg' || partId === 'arm') && this.isAlive) {
+      const totalLegsMissing = this.removedParts.leg + this.removedParts.arm;
+      if (totalLegsMissing > 0) {
+        this.speed = PET.SPEED * (1 - BODY_PARTS.LEG.speedReduction);
+        this.fleeSpeed = this.speed * 1.5;
+      }
+    }
+
+    // Update visual overlay
+    this.updateMissingPartsOverlay();
+
+    const bodyPartInfo = {
+      partId: partId,
+      textureKey: `body_part_${partId}`,
+      name: partConfig.name
+    };
+
+    // For skin, store victim appearance info for wearing
+    if (partId === 'skin') {
+      bodyPartInfo.victimRace = null;
+      bodyPartInfo.victimGender = null;
+      bodyPartInfo.isPet = true;
+      bodyPartInfo.petType = this.petType;  // 'dog' or 'cat'
+    }
+
+    return bodyPartInfo;
+  }
+
+  /**
+   * Update the overlay showing missing body parts
+   */
+  updateMissingPartsOverlay() {
+    if (!this.missingPartsOverlay) {
+      this.missingPartsOverlay = this.scene.add.graphics();
+      this.missingPartsOverlay.setDepth(DEPTH.NPC + 1);
+      if (this.scene.hud) {
+        this.scene.hud.ignoreGameObject(this.missingPartsOverlay);
+      }
+    }
+
+    this.drawMissingPartsOverlay();
+  }
+
+  /**
+   * Draw X marks on missing parts
+   */
+  drawMissingPartsOverlay() {
+    if (!this.missingPartsOverlay || !this.sprite?.active) return;
+
+    this.missingPartsOverlay.clear();
+    const x = this.sprite.x;
+    const y = this.sprite.y;
+
+    this.missingPartsOverlay.lineStyle(1, 0xcc0000, 1);
+
+    // Head - draw X where head would be
+    if (this.removedParts.head > 0) {
+      this.missingPartsOverlay.lineBetween(x + 3, y - 4, x + 7, y);
+      this.missingPartsOverlay.lineBetween(x + 3, y, x + 7, y - 4);
+    }
+
+    // Heart - draw X on body
+    if (this.removedParts.heart > 0) {
+      this.missingPartsOverlay.lineBetween(x - 2, y - 2, x + 2, y + 2);
+      this.missingPartsOverlay.lineBetween(x - 2, y + 2, x + 2, y - 2);
+    }
+
+    // Front legs (arm)
+    if (this.removedParts.arm >= 1) {
+      this.missingPartsOverlay.lineBetween(x + 2, y + 2, x + 4, y + 6);
+      this.missingPartsOverlay.lineBetween(x + 2, y + 6, x + 4, y + 2);
+    }
+    if (this.removedParts.arm >= 2) {
+      this.missingPartsOverlay.lineBetween(x + 4, y + 2, x + 6, y + 6);
+      this.missingPartsOverlay.lineBetween(x + 4, y + 6, x + 6, y + 2);
+    }
+
+    // Back legs
+    if (this.removedParts.leg >= 1) {
+      this.missingPartsOverlay.lineBetween(x - 4, y + 2, x - 2, y + 6);
+      this.missingPartsOverlay.lineBetween(x - 4, y + 6, x - 2, y + 2);
+    }
+    if (this.removedParts.leg >= 2) {
+      this.missingPartsOverlay.lineBetween(x - 6, y + 2, x - 4, y + 6);
+      this.missingPartsOverlay.lineBetween(x - 6, y + 6, x - 4, y + 2);
+    }
+
+    // Funnies - draw X on rear
+    if (this.removedParts.funnies > 0) {
+      this.missingPartsOverlay.lineBetween(x - 5, y - 1, x - 2, y + 2);
+      this.missingPartsOverlay.lineBetween(x - 5, y + 2, x - 2, y - 1);
+    }
+  }
+
+  /**
+   * Update overlay position
+   */
+  updateMissingPartsPosition() {
+    if (this.missingPartsOverlay && this.hasAnyMissingParts()) {
+      this.drawMissingPartsOverlay();
+    }
+  }
+
+  /**
+   * Check if entity has any missing parts
+   */
+  hasAnyMissingParts() {
+    return Object.values(this.removedParts).some(count => count > 0);
+  }
+
+  /**
+   * Clean up missing parts overlay
+   */
+  hideMissingPartsOverlay() {
+    if (this.missingPartsOverlay) {
+      this.missingPartsOverlay.destroy();
+      this.missingPartsOverlay = null;
+    }
+  }
+
   // ==================== Death ====================
 
   kill() {
@@ -900,7 +1091,15 @@ export class Pet {
     this.scene.spawnBloodSplatter(deathX, deathY);
 
     const corpseTextureKey = `corpse_${this.petType}_${this.colorVariant.name}`;
-    this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, false, null, null, null);
+    this.corpseData = this.scene.spawnCorpse(deathX, deathY, corpseTextureKey, false, null, null, null, true, this.petType);
+
+    // Transfer removed parts to corpse
+    if (this.corpseData) {
+      this.corpseData.removedParts = { ...this.removedParts };
+    }
+
+    // Clean up overlay
+    this.hideMissingPartsOverlay();
 
     this.scene.time.delayedCall(100, () => {
       if (this.sprite?.active) {
@@ -918,6 +1117,7 @@ export class Pet {
       this.followIcon.destroy();
       this.followIcon = null;
     }
+    this.hideMissingPartsOverlay();
     if (this.sprite) {
       this.sprite.destroy();
     }

@@ -130,7 +130,8 @@ export const PRISONER = {
   MAX_MISERY: 3,
   SHIVER_DURATION: 5000,    // 5 seconds of shivering at max misery before death
   FLEE_SPEED: 100,          // Speed when released and fleeing
-  SHIVER_INTERVAL: 800,     // ms between shivers when imprisoned
+  SHIVER_INTERVAL_MIN: 10000,  // 10 seconds min between shivers when imprisoned
+  SHIVER_INTERVAL_MAX: 20000,  // 20 seconds max between shivers when imprisoned
   PICKUP_RANGE: 24          // pixels
 };
 
@@ -139,6 +140,24 @@ export const CAGE = {
   SIZE: 24,                 // 24x24 pixel cage
   COUNT: 3,                 // Number of cages in basement
   SPACING: 32               // pixels between cage centers
+};
+
+// Body parts that can be removed
+export const BODY_PARTS = {
+  HEAD: { id: 'head', name: 'Head', key: '1', max: 1, fatal: true },
+  HEART: { id: 'heart', name: 'Heart', key: '2', max: 1, fatal: true },
+  ARM: { id: 'arm', name: 'Arm', key: '3', max: 2, fatal: false },
+  LEG: { id: 'leg', name: 'Leg', key: '4', max: 2, fatal: false, speedReduction: 0.9 },
+  FUNNIES: { id: 'funnies', name: 'Funnies', key: '5', max: 1, fatal: false },
+  SKIN: { id: 'skin', name: 'Skin', key: '6', max: 1, fatal: true }
+};
+
+// Carried item types
+export const CARRIED_TYPE = {
+  NONE: null,
+  CORPSE: 'corpse',
+  PRISONER: 'prisoner',
+  BODY_PART: 'body_part'
 };
 
 // Visual effects
@@ -155,8 +174,8 @@ export const DEPTH = {
   ROAD: 0.25,
   RITUAL_SITE: 0.5,
   BLOOD: 1,
-  CORPSE: 2,
-  FURNITURE: 5,
+  FURNITURE: 2,
+  CORPSE: 5,
   NPC: 10,
   PLAYER: 10,
   WALLS: 15,

@@ -3,6 +3,7 @@ import { Player } from '../entities/Player.js';
 import { Human } from '../entities/Human.js';
 import { Police } from '../entities/Police.js';
 import { Pet } from '../entities/Pet.js';
+import { Rat } from '../entities/Rat.js';
 import { Cage } from '../entities/Cage.js';
 import { HUD } from '../ui/HUD.js';
 import { Minimap } from '../ui/Minimap.js';
@@ -61,7 +62,9 @@ export class GameScene extends Phaser.Scene {
     this.humans = [];
     this.police = [];
     this.pets = [];
+    this.rats = [];
     this.cages = [];
+    this.lamps = [];
   }
 
   /**
@@ -127,6 +130,7 @@ export class GameScene extends Phaser.Scene {
   spawnEntities() {
     this.spawnHumans();
     this.spawnPets();
+    this.spawnRats();
     this.spawnPolice();
     this.spawnCages();
 
@@ -291,6 +295,7 @@ export class GameScene extends Phaser.Scene {
     this.player.update(time, delta);
     this.humans.forEach(human => human.update(delta));
     this.pets.forEach(pet => pet.update(delta));
+    this.rats.forEach(rat => rat.update(delta));
     this.police.forEach(cop => cop.update(delta));
     this.policeDispatcher.processQueue(time);
 
@@ -318,6 +323,13 @@ export class GameScene extends Phaser.Scene {
     // Update day/night system
     if (this.dayNightSystem) {
       this.dayNightSystem.update(delta);
+    }
+
+    // Update lamp lights (affected by day/night)
+    if (this.townGenerator && this.lamps) {
+      for (const lamp of this.lamps) {
+        this.townGenerator.updateLampLight(lamp);
+      }
     }
 
     // Update clock widget
@@ -521,6 +533,78 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Spawn rats in downtown (poor neighborhood) area
+   * Rats wander around the central core of the map
+   */
+  spawnRats() {
+    const RAT_COUNT = 20;
+    const centerX = (this.mapWidth / 2) * this.tileSize;
+    const centerY = (this.mapHeight / 2) * this.tileSize;
+    const downtownRadius = 45 * this.tileSize;  // Poor neighborhood is within radius 45 tiles
+
+    for (let i = 0; i < RAT_COUNT; i++) {
+      // Random position within downtown (poor neighborhood core)
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * downtownRadius * 0.8;  // Stay well within downtown
+
+      let spawnX = centerX + Math.cos(angle) * distance;
+      let spawnY = centerY + Math.sin(angle) * distance;
+
+      // Check if position is blocked and find valid spot
+      if (this.isPositionBlocked(spawnX, spawnY)) {
+        const validPos = this.findNearbyValidPosition(spawnX, spawnY);
+        if (validPos) {
+          spawnX = validPos.x;
+          spawnY = validPos.y;
+        } else {
+          continue;  // Skip this rat if no valid position found
+        }
+      }
+
+      const rat = new Rat(this, spawnX, spawnY);
+      this.rats.push(rat);
+      this.physics.add.collider(rat.sprite, this.walls);
+
+      if (this.hud) {
+        this.hud.ignoreGameObject(rat.sprite);
+      }
+    }
+  }
+
+  /**
+   * Spawn a dead rat at a location (when a living rat is killed)
+   */
+  spawnDeadRat(x, y) {
+    // Create a simple dead rat sprite (for pickup)
+    const deadRat = this.add.sprite(x, y, 'rat_dead');
+    deadRat.setDepth(DEPTH.CORPSE);
+    deadRat.isDeadRat = true;
+    deadRat.isCooked = false;
+
+    if (this.hud) {
+      this.hud.ignoreGameObject(deadRat);
+    }
+
+    // Register with action system for pickup
+    if (this.actionSystem) {
+      this.actionSystem.registerObject(deadRat, {
+        owner: { type: 'dead_rat', sprite: deadRat },
+        getActions: () => {
+          if (this.player?.isCarryingAnything()) return [];
+          return [{
+            name: 'Pick Up',
+            key: 'SPACE',
+            keyCode: Phaser.Input.Keyboard.KeyCodes.SPACE,
+            callback: () => this.player?.pickupDeadRat(deadRat)
+          }];
+        }
+      });
+    }
+
+    return deadRat;
+  }
+
   spawnPolice() {
     // Get police station spawn point
     const spawnPoint = this.townGenerator.getPoliceSpawnPoint();
@@ -610,8 +694,8 @@ export class GameScene extends Phaser.Scene {
   // ==================== Public API for Systems ====================
 
   // Corpse management (delegated to CorpseManager)
-  spawnCorpse(x, y, textureKey, isPolice = false, race = null, gender = null, age = null) {
-    return this.corpseManager.spawn(x, y, textureKey, isPolice, race, gender, age);
+  spawnCorpse(x, y, textureKey, isPolice = false, race = null, gender = null, age = null, isPet = false, petType = null) {
+    return this.corpseManager.spawn(x, y, textureKey, isPolice, race, gender, age, isPet, petType);
   }
 
   spawnBloodSplatter(x, y) {
@@ -707,54 +791,105 @@ export class GameScene extends Phaser.Scene {
   // ==================== Player Transformation ====================
 
   /**
-   * Transform player appearance after cop sacrifice
+   * Transform player appearance based on worn skin
    */
-  transformPlayerAppearance() {
-    // Cycle through different player appearances
-    if (!this.playerAppearanceIndex) {
-      this.playerAppearanceIndex = 0;
+  transformPlayerToSkin(skinInfo) {
+    // Track skin index for unique texture key
+    if (!this.skinAppearanceIndex) {
+      this.skinAppearanceIndex = 0;
     }
-    this.playerAppearanceIndex = (this.playerAppearanceIndex + 1) % 4;
+    this.skinAppearanceIndex++;
 
-    // Apply different tints based on appearance index
-    const appearances = [
-      0x6b8cff, // Original blue
-      0x8b6bff, // Purple
-      0xff6b8c, // Pink
-      0x6bff8c  // Green
-    ];
-
-    const color = appearances[this.playerAppearanceIndex];
-    this.player.sprite.setTint(color);
-
-    // Create new player texture with different color
-    this.createPlayerTexture(color);
-    this.player.sprite.setTexture(`player_${this.playerAppearanceIndex}`);
-    this.player.sprite.clearTint();
+    if (skinInfo.isPet) {
+      // Pet skin - create costume appearance
+      const petType = skinInfo.petType || 'dog';
+      this.createPetCostumeTexture(petType, this.skinAppearanceIndex);
+      this.player.sprite.setTexture(`player_costume_${petType}_${this.skinAppearanceIndex}`);
+    } else {
+      // Human skin - use victim's race colors
+      const race = skinInfo.victimRace;
+      if (race) {
+        this.createSkinDisguiseTexture(race, skinInfo.victimGender, this.skinAppearanceIndex);
+        this.player.sprite.setTexture(`player_skin_${this.skinAppearanceIndex}`);
+      }
+    }
   }
 
   /**
-   * Create a player texture with custom color
+   * Create a player texture that looks like wearing a pet costume
    */
-  createPlayerTexture(color) {
-    const key = `player_${this.playerAppearanceIndex}`;
+  createPetCostumeTexture(petType, index) {
+    const key = `player_costume_${petType}_${index}`;
     if (this.textures.exists(key)) return;
 
     const g = this.make.graphics({ x: 0, y: 0, add: false });
 
-    // Derive colors from base
-    const r = (color >> 16) & 0xff;
-    const gVal = (color >> 8) & 0xff;
-    const b = color & 0xff;
+    // Base colors for costume
+    const furColor = petType === 'dog' ? 0x8b6914 : 0x888888;
+    const darkFur = petType === 'dog' ? 0x5a4510 : 0x555555;
 
-    const bodyColor = ((Math.floor(r * 0.7)) << 16) | ((Math.floor(gVal * 0.7)) << 8) | Math.floor(b * 0.7);
-    const legColor = ((Math.floor(r * 0.5)) << 16) | ((Math.floor(gVal * 0.5)) << 8) | Math.floor(b * 0.5);
+    // Hood with ears
+    g.fillStyle(furColor);
+    g.fillRect(2, 0, 12, 6);  // hood
 
-    g.fillStyle(color);
-    g.fillRect(2, 0, 12, 4);  // head
+    // Ears (on top of hood)
+    if (petType === 'dog') {
+      g.fillRect(2, -2, 3, 3);  // left ear
+      g.fillRect(11, -2, 3, 3);  // right ear
+    } else {
+      // Pointy cat ears
+      g.fillTriangle(3, 0, 5, -3, 7, 0);
+      g.fillTriangle(9, 0, 11, -3, 13, 0);
+    }
+
+    // Body (furry costume)
+    g.fillStyle(darkFur);
+    g.fillRect(2, 6, 12, 6);  // body
+
+    // Legs (costume feet)
+    g.fillStyle(furColor);
+    g.fillRect(4, 12, 3, 4);  // left leg
+    g.fillRect(9, 12, 3, 4);  // right leg
+
+    // Snout on hood
+    g.fillStyle(0xffccaa);
+    g.fillRect(6, 3, 4, 2);
+
+    g.generateTexture(key, 16, 16);
+  }
+
+  /**
+   * Create a player texture with victim's skin colors
+   */
+  createSkinDisguiseTexture(race, gender, index) {
+    const key = `player_skin_${index}`;
+    if (this.textures.exists(key)) return;
+
+    const g = this.make.graphics({ x: 0, y: 0, add: false });
+
+    const skinColor = race.skin;
+    const hairColor = race.hair;
+
+    // Derive darker versions for body
+    const r = (skinColor >> 16) & 0xff;
+    const gVal = (skinColor >> 8) & 0xff;
+    const b = skinColor & 0xff;
+    const bodyColor = ((Math.floor(r * 0.85)) << 16) | ((Math.floor(gVal * 0.85)) << 8) | Math.floor(b * 0.85);
+
+    // Hair on top
+    g.fillStyle(hairColor);
+    g.fillRect(3, 0, 10, 2);
+
+    // Head with victim's skin
+    g.fillStyle(skinColor);
+    g.fillRect(2, 2, 12, 4);
+
+    // Body
     g.fillStyle(bodyColor);
-    g.fillRect(2, 4, 12, 8);  // body
-    g.fillStyle(legColor);
+    g.fillRect(2, 6, 12, 6);
+
+    // Legs
+    g.fillStyle(skinColor);
     g.fillRect(4, 12, 3, 4);  // left leg
     g.fillRect(9, 12, 3, 4);  // right leg
 
@@ -867,6 +1002,15 @@ export class GameScene extends Phaser.Scene {
     // Show the new day notification
     if (this.hud) {
       this.hud.showNotification(`${this.dayNightSystem.getDateString()} - 9:00 AM`, 2000);
+    }
+  }
+
+  /**
+   * Show a notification message
+   */
+  showNotification(message, duration = 2000) {
+    if (this.hud) {
+      this.hud.showNotification(message, duration);
     }
   }
 }
