@@ -205,23 +205,23 @@ export class GameScene extends Phaser.Scene {
     // Add initial daily objective
     this.objectiveSystem.addDailyObjective();
 
-    // Listen for max notoriety to add special "Get Caught" objective
+    // Listen for notoriety level 4 to add special "Get Caught" objective
     this.events.on('notorietyLevelUp', (data) => {
-      if (data.level === this.notorietySystem?.maxLevel) {
+      if (data.level === 4) {
         this.addGetCaughtObjective();
       }
     });
   }
 
   /**
-   * Add the special "Get Caught" objective when player reaches max notoriety
+   * Add the special "Get Caught" objective when player reaches notoriety level 4
    */
   addGetCaughtObjective() {
     // Create the special win objective
     const getCaughtObjective = {
       id: 9999, // Special ID for this objective
       title: 'GET CAUGHT',
-      description: 'You have achieved maximum notoriety. Let the cops catch you to cement your legacy.',
+      description: 'The city knows your name. Let the cops catch you to cement your legacy.',
       rewards: 'VICTORY',
       penalty: '',
       xp: 0,
@@ -236,7 +236,7 @@ export class GameScene extends Phaser.Scene {
     this.objectiveSystem.updateWidget();
 
     // Show notification
-    this.showNotification('MAXIMUM NOTORIETY! Your legacy awaits...');
+    this.showNotification('NOTORIETY LEVEL 4! Your legacy awaits...');
   }
 
   /**
