@@ -4,6 +4,7 @@ Instructions for game:
 2) Click on objectives for more details
 3) Don't get caught by the police
 4) Go to bed before the end of the day or get caught and exposed
+4.1) WASD to move
 
 You can do all sorts of stuff in this zaney wacky little world:
 * kill people
